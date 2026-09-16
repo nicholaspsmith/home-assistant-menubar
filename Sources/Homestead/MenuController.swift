@@ -9,7 +9,7 @@ import HomesteadCore
 /// `@MainActor` because it reads `AppModel`, which is main-actor isolated — and
 /// because everything here is AppKit anyway.
 @MainActor
-final class MenuController: NSObject {
+final class MenuController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private let addSettingsItems: (NSMenu) -> Void
     private let onOpenConnection: () -> Void
@@ -21,6 +21,8 @@ final class MenuController: NSObject {
     /// Whether the dashboard list is showing. Reset whenever the menu closes,
     /// so it always opens on the devices.
     private var pickerExpanded = false
+    /// The light the shared colour panel is currently driving.
+    private var colorTarget: Device?
 
     init(model: AppModel,
          addSettingsItems: @escaping (NSMenu) -> Void,
@@ -76,9 +78,13 @@ final class MenuController: NSObject {
                 let state = snapshot.states[device.entityId]
 
                 let rowItem = NSMenuItem()
-                let rowView = DeviceRowView(device: device, state: state) { [weak self] on in
-                    self?.toggled(device, on: on)
-                }
+                let canPickColor = device.kind == .light && LightCapabilities.supportsColor(state)
+                let rowView = DeviceRowView(
+                    device: device,
+                    state: state,
+                    onToggle: { [weak self] on in self?.toggled(device, on: on) },
+                    onPickColor: canPickColor ? { [weak self] in self?.pickColor(for: device) } : nil
+                )
                 rowItem.view = rowView
                 menu.addItem(rowItem)
                 rows[device.entityId] = (rowItem, rowView)
@@ -207,8 +213,52 @@ final class MenuController: NSObject {
         model.retryNow()
     }
 
+    /// Opens the system colour panel for a light. The menu closes as the panel
+    /// takes focus — unavoidable, and the same thing the shared Icon ▸ Custom
+    /// Colour… picker does — but the light keeps following the wheel live.
+    private func pickColor(for device: Device) {
+        colorTarget = device
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        if let rgb = LightCapabilities.currentColor(model.state(for: device.entityId)) {
+            panel.color = NSColor(srgbRed: CGFloat(rgb.red) / 255,
+                                  green: CGFloat(rgb.green) / 255,
+                                  blue: CGFloat(rgb.blue) / 255,
+                                  alpha: 1)
+        }
+        panel.setTarget(self)
+        panel.setAction(#selector(colorPanelChanged(_:)))
+        panel.delegate = self
+        // An .accessory app has no windows and cannot bring a panel forward
+        // without activating first.
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func colorPanelChanged(_ sender: NSColorPanel) {
+        guard let device = colorTarget,
+              let rgb = sender.color.usingColorSpace(.sRGB) else { return }
+        model.setColor(device,
+                       red: Int((rgb.redComponent * 255).rounded()),
+                       green: Int((rgb.greenComponent * 255).rounded()),
+                       blue: Int((rgb.blueComponent * 255).rounded()))
+    }
+
     @objc private func openConnection() {
         onOpenConnection()
+    }
+}
+
+extension MenuController {
+    /// Stop driving a light once the panel is dismissed. Leaving the target
+    /// attached means the next app to open the shared panel would start
+    /// recolouring this one's bulb.
+    public func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSColorPanel) === NSColorPanel.shared else { return }
+        NSColorPanel.shared.setTarget(nil)
+        NSColorPanel.shared.setAction(nil)
+        NSColorPanel.shared.delegate = nil
+        colorTarget = nil
     }
 }
 

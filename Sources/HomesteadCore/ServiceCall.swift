@@ -48,6 +48,15 @@ public struct ServiceCall: Equatable, Sendable {
         }
     }
 
+    /// Set a light's colour. Only lights have one; everything else returns nil
+    /// rather than sending a call Home Assistant would reject.
+    public static func setColor(_ device: Device, red: Int, green: Int, blue: Int) -> ServiceCall? {
+        guard device.kind == .light else { return nil }
+        let channels = [red, green, blue].map { JSONValue.number(Double($0.clamped(to: 0...255))) }
+        return ServiceCall(domain: "light", service: "turn_on", entityId: device.entityId,
+                           serviceData: ["rgb_color": .array(channels)])
+    }
+
     /// The WebSocket command body, without the `id` the client assigns.
     public var commandPayload: [String: JSONValue] {
         var payload: [String: JSONValue] = [

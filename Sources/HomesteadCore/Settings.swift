@@ -7,6 +7,7 @@ public final class Settings {
         public static let selectedDashboard = "SelectedDashboard"
         public static let showSensors = "ShowSensors"
         public static let visibleDashboards = "VisibleDashboards"
+        public static let dashboardOrder = "DashboardOrder"
     }
 
     private let defaults: UserDefaults
@@ -46,13 +47,38 @@ public final class Settings {
         set { defaults.set(newValue, forKey: Key.visibleDashboards) }
     }
 
-    /// The dashboards to offer, in Home Assistant's own order — the order they
-    /// were ticked in says nothing about how they should be listed.
+    /// The `url_path`s in the order the rows were dragged into. Paths missing
+    /// from it — a dashboard added in Home Assistant since — keep Home
+    /// Assistant's own order, after the ones that were arranged.
+    public var dashboardOrder: [String] {
+        get { defaults.stringArray(forKey: Key.dashboardOrder) ?? [] }
+        set { defaults.set(newValue, forKey: Key.dashboardOrder) }
+    }
+
+    /// Every dashboard, in the chosen order: what the Dashboards window lists.
+    public func ordered(_ listings: [DashboardListing]) -> [DashboardListing] {
+        let rank = Dictionary(uniqueKeysWithValues: dashboardOrder.enumerated().map { ($0.element, $0.offset) })
+        return listings.enumerated().sorted { left, right in
+            let leftRank = rank[left.element.urlPath ?? ""]
+            let rightRank = rank[right.element.urlPath ?? ""]
+            switch (leftRank, rightRank) {
+            case let (l?, r?): return l < r
+            case (_?, nil): return true
+            case (nil, _?): return false
+            // Neither was arranged: keep Home Assistant's order between them.
+            case (nil, nil): return left.offset < right.offset
+            }
+        }.map(\.element)
+    }
+
+    /// The dashboards to offer in the menu: the ticked ones, in the chosen
+    /// order.
     public func visible(from listings: [DashboardListing]) -> [DashboardListing] {
         let chosen = Set(visibleDashboardPaths)
-        guard !chosen.isEmpty else { return listings }
-        let filtered = listings.filter { chosen.contains($0.urlPath ?? "") }
-        return filtered.isEmpty ? listings : filtered
+        let ordered = ordered(listings)
+        guard !chosen.isEmpty else { return ordered }
+        let filtered = ordered.filter { chosen.contains($0.urlPath ?? "") }
+        return filtered.isEmpty ? ordered : filtered
     }
 
     /// Which dashboard to open with: the remembered one if it still exists,

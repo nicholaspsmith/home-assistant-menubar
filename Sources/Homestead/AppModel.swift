@@ -53,6 +53,12 @@ final class AppModel {
     /// Per-entity in-flight level call, so a drag sends one call at a time.
     private var levelInFlight: Set<String> = []
     private var levelQueued: [String: Double] = [:]
+    private var colorQueued: [String: (red: Int, green: Int, blue: Int)] = [:]
+    /// Set while a dashboard's first state snapshot is outstanding. Until it
+    /// lands, the rows on screen belong to the *previous* dashboard, so its
+    /// entities must rebuild the menu rather than be patched into rows that do
+    /// not exist.
+    private var awaitingFirstSnapshot = false
 
     private(set) var snapshot = Snapshot()
     var onSnapshotChange: ((Snapshot) -> Void)?
@@ -153,6 +159,33 @@ final class AppModel {
         await perform(call, revertEntity: nil)
     }
 
+    /// The colour panel fires continuously while the wheel is dragged, so this
+    /// shares the level path's one-in-flight-plus-latest coalescing: the bulb
+    /// cannot keep up with every intermediate colour, and stale ones arriving
+    /// late would fight the final choice.
+    func setColor(_ device: Device, red: Int, green: Int, blue: Int) {
+        guard ServiceCall.setColor(device, red: red, green: green, blue: blue) != nil else { return }
+        let key = "color:" + device.entityId
+        if levelInFlight.contains(key) {
+            colorQueued[device.entityId] = (red, green, blue)
+            return
+        }
+        levelInFlight.insert(key)
+        Task { await sendColor(device, red: red, green: green, blue: blue) }
+    }
+
+    private func sendColor(_ device: Device, red: Int, green: Int, blue: Int) async {
+        defer {
+            if let next = colorQueued.removeValue(forKey: device.entityId) {
+                Task { await sendColor(device, red: next.red, green: next.green, blue: next.blue) }
+            } else {
+                levelInFlight.remove("color:" + device.entityId)
+            }
+        }
+        guard let call = ServiceCall.setColor(device, red: red, green: green, blue: blue) else { return }
+        await perform(call, revertEntity: nil)
+    }
+
     private func perform(_ call: ServiceCall, revertEntity: String?) async {
         guard let client else { return }
         do {
@@ -234,6 +267,7 @@ final class AppModel {
 
         let config = try await client.send(payload)
         refs = DashboardParser.references(in: config)
+        awaitingFirstSnapshot = true
 
         if let existing = subscriptionId {
             await client.unsubscribe(existing)
@@ -262,7 +296,8 @@ final class AppModel {
         // A kind can change with state (a cover only reports SET_POSITION once
         // it is known), and names arrive with the first snapshot, so the first
         // event after a load rebuilds rather than patches.
-        if snapshot.groups.isEmpty {
+        if awaitingFirstSnapshot || snapshot.groups.isEmpty {
+            awaitingFirstSnapshot = false
             rebuildGroups()
         } else {
             onEntitiesChanged?(changed)

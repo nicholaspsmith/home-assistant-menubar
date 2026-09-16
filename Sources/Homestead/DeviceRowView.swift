@@ -10,13 +10,21 @@ final class DeviceRowView: NSView {
     private let nameLabel: NSTextField
     private let valueLabel = NSTextField(labelWithString: "")
     private let toggle = NSSwitch()
+    private let swatch = NSButton()
     private let onToggle: (Bool) -> Void
+    private let onPickColor: (() -> Void)?
 
     var switchIsOn: Bool { toggle.state == .on }
 
-    init(device: Device, state: EntityState?, onToggle: @escaping (Bool) -> Void) {
+    /// - Parameter onPickColor: supplied only for a light whose bulb actually
+    ///   takes a colour; the row then shows a swatch that opens the picker.
+    init(device: Device,
+         state: EntityState?,
+         onToggle: @escaping (Bool) -> Void,
+         onPickColor: (() -> Void)? = nil) {
         self.device = device
         self.onToggle = onToggle
+        self.onPickColor = onPickColor
         nameLabel = NSTextField(labelWithString: device.displayName)
         super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: 26))
 
@@ -31,7 +39,18 @@ final class DeviceRowView: NSView {
         toggle.action = #selector(flipped)
         toggle.isHidden = !device.kind.hasSwitch
 
-        for view in [nameLabel, valueLabel, toggle] {
+        // A colour well would be the obvious control, but NSColorWell opens the
+        // panel by running its own tracking, which a tracking menu will not let
+        // it do. A plain button that opens NSColorPanel itself works from here.
+        swatch.isBordered = false
+        swatch.bezelStyle = .regularSquare
+        swatch.title = ""
+        swatch.target = self
+        swatch.action = #selector(pickColor)
+        swatch.isHidden = onPickColor == nil
+        swatch.toolTip = "Set colour"
+
+        for view in [nameLabel, valueLabel, swatch, toggle] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -45,8 +64,18 @@ final class DeviceRowView: NSView {
             constraints += [
                 toggle.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
                 toggle.centerYAnchor.constraint(equalTo: centerYAnchor),
-                valueLabel.trailingAnchor.constraint(equalTo: toggle.leadingAnchor, constant: -8),
             ]
+        }
+        if onPickColor != nil {
+            constraints += [
+                swatch.trailingAnchor.constraint(equalTo: toggle.leadingAnchor, constant: -8),
+                swatch.centerYAnchor.constraint(equalTo: centerYAnchor),
+                swatch.widthAnchor.constraint(equalToConstant: 14),
+                swatch.heightAnchor.constraint(equalToConstant: 14),
+                valueLabel.trailingAnchor.constraint(equalTo: swatch.leadingAnchor, constant: -8),
+            ]
+        } else if device.kind.hasSwitch {
+            constraints.append(valueLabel.trailingAnchor.constraint(equalTo: toggle.leadingAnchor, constant: -8))
         } else {
             constraints.append(valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14))
         }
@@ -63,6 +92,38 @@ final class DeviceRowView: NSView {
         toggle.state = (state?.isOn ?? false) ? .on : .off
         nameLabel.textColor = available ? .labelColor : .tertiaryLabelColor
         valueLabel.stringValue = available ? Self.valueText(device: device, state: state) : "Unavailable"
+
+        if onPickColor != nil {
+            swatch.isEnabled = available
+            swatch.image = Self.swatchImage(for: state)
+        }
+    }
+
+    /// A filled circle in the light's current colour — or an outline when it has
+    /// none yet, which is honest about there being nothing to show.
+    private static func swatchImage(for state: EntityState?) -> NSImage {
+        let rgb = LightCapabilities.currentColor(state)
+        let colour = rgb.map {
+            NSColor(srgbRed: CGFloat($0.red) / 255, green: CGFloat($0.green) / 255, blue: CGFloat($0.blue) / 255, alpha: 1)
+        }
+        let size = NSSize(width: 14, height: 14)
+        let image = NSImage(size: size, flipped: false) { _ in
+            let circle = NSBezierPath(ovalIn: NSRect(x: 1, y: 1, width: 12, height: 12))
+            if let colour {
+                colour.setFill()
+                circle.fill()
+            }
+            NSColor.tertiaryLabelColor.setStroke()
+            circle.lineWidth = 1
+            circle.stroke()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
+    @objc private func pickColor() {
+        onPickColor?()
     }
 
     static func valueText(device: Device, state: EntityState?) -> String {

@@ -104,15 +104,48 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["my-home", "spa"])
     }
 
-    func testVisibleKeepsTheDashboardsOwnOrderNotTheChoiceOrder() {
+    func testVisibleFollowsTheChosenOrder() {
+        // The window lets rows be dragged, so the stored order is a preference,
+        // not an accident of how Home Assistant listed them.
         let settings = Settings(defaults: defaults)
-        settings.visibleDashboardPaths = ["spa", "my-home"]
+        settings.visibleDashboardPaths = ["my-home", "spa"]
+        settings.dashboardOrder = ["spa", "my-home", "garden"]
 
         let listings = [
             DashboardListing(urlPath: "my-home", title: "My Home"),
             DashboardListing(urlPath: "spa", title: "Hot Tub"),
         ]
-        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["my-home", "spa"])
+        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["spa", "my-home"])
+    }
+
+    func testDashboardsMissingFromTheOrderKeepHomeAssistantsOrderAtTheEnd() {
+        let settings = Settings(defaults: defaults)
+        settings.dashboardOrder = ["spa"]
+
+        let listings = [
+            DashboardListing(urlPath: "my-home", title: "My Home"),
+            DashboardListing(urlPath: "garden", title: "Garden"),
+            DashboardListing(urlPath: "spa", title: "Hot Tub"),
+        ]
+        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["spa", "my-home", "garden"])
+    }
+
+    func testOrderedListsEveryDashboardForTheWindow() {
+        let settings = Settings(defaults: defaults)
+        settings.dashboardOrder = ["spa", "my-home"]
+
+        let listings = [
+            DashboardListing(urlPath: "my-home", title: "My Home"),
+            DashboardListing(urlPath: "garden", title: "Garden"),
+            DashboardListing(urlPath: "spa", title: "Hot Tub"),
+        ]
+        XCTAssertEqual(settings.ordered(listings).map(\.urlPath), ["spa", "my-home", "garden"])
+    }
+
+    func testDashboardOrderRoundTrips() {
+        let settings = Settings(defaults: defaults)
+        settings.dashboardOrder = ["b", "a"]
+        XCTAssertEqual(Settings(defaults: defaults).dashboardOrder, ["b", "a"])
     }
 
     func testChoosingNoneShowsEverythingRatherThanAnEmptyMenu() {
