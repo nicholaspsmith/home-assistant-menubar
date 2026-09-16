@@ -18,7 +18,6 @@ final class MenuController: NSObject {
     private var rows: [String: (item: NSMenuItem, view: DeviceRowView)] = [:]
     private var sliders: [String: (item: NSMenuItem, view: LevelSliderView)] = [:]
     private var devices: [String: Device] = [:]
-    private var picker: NSPopUpButton?
 
     init(model: AppModel,
          addSettingsItems: @escaping (NSMenu) -> Void,
@@ -36,7 +35,6 @@ final class MenuController: NSObject {
         rows.removeAll()
         sliders.removeAll()
         devices.removeAll()
-        picker = nil
 
         let snapshot = model.snapshot
 
@@ -94,23 +92,28 @@ final class MenuController: NSObject {
         addSettingsItems(menu)
     }
 
+    /// The dashboard picker is a submenu, not an NSPopUpButton: while a menu is
+    /// tracking it owns the mouse, so a click never reaches a popup button's own
+    /// tracking loop — and when one is opened programmatically it dismisses the
+    /// menu it lives in. A submenu is the native way to offer a choice inside a
+    /// menu. Picking one closes the menu (standard NSMenuItem behaviour); the
+    /// chosen dashboard is remembered, so the next open lands on it.
     private func addPicker(to menu: NSMenu, snapshot: Snapshot) {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 30))
-        let button = NSPopUpButton(frame: NSRect(x: 12, y: 3, width: DeviceRowView.width - 24, height: 24))
-        button.addItems(withTitles: snapshot.dashboards.map(\.title))
-        if let selected = snapshot.selected,
-           let index = snapshot.dashboards.firstIndex(where: { $0.urlPath == selected.urlPath }) {
-            button.selectItem(at: index)
-        }
-        button.target = self
-        button.action = #selector(dashboardChanged)
-        button.isEnabled = !snapshot.dashboards.isEmpty
-        container.addSubview(button)
+        let title = snapshot.selected?.title ?? "Dashboard"
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = !snapshot.dashboards.isEmpty
 
-        let item = NSMenuItem()
-        item.view = container
+        let submenu = NSMenu()
+        for (index, dashboard) in snapshot.dashboards.enumerated() {
+            let choice = NSMenuItem(title: dashboard.title, action: #selector(dashboardChosen(_:)), keyEquivalent: "")
+            choice.target = self
+            choice.tag = index
+            choice.state = dashboard.urlPath == snapshot.selected?.urlPath ? .on : .off
+            submenu.addItem(choice)
+        }
+        item.submenu = submenu
         menu.addItem(item)
-        picker = button
+        menu.addItem(.separator())
     }
 
     private func addStatusRow(to menu: NSMenu, snapshot: Snapshot) {
@@ -178,10 +181,9 @@ final class MenuController: NSObject {
         sliders[device.entityId]?.item.isHidden = !on
     }
 
-    @objc private func dashboardChanged() {
-        guard let index = picker?.indexOfSelectedItem,
-              model.snapshot.dashboards.indices.contains(index) else { return }
-        model.select(dashboard: model.snapshot.dashboards[index])
+    @objc private func dashboardChosen(_ sender: NSMenuItem) {
+        guard model.snapshot.dashboards.indices.contains(sender.tag) else { return }
+        model.select(dashboard: model.snapshot.dashboards[sender.tag])
     }
 
     @objc private func retry() {

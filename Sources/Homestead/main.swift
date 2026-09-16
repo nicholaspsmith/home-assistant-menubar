@@ -112,9 +112,8 @@ final class App: NSObject, NSApplicationDelegate {
 
     // MARK: - Icon
 
-    /// Replaced in Task 10 by the house glyph.
     func refreshIcon() {
-        status.setIcon(appearance.image(fraction: 0))
+        status.setIcon(HouseIcon.image(snapshot: model?.snapshot ?? Snapshot(), appearance: appearance))
     }
 }
 

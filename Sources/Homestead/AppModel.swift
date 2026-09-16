@@ -173,6 +173,7 @@ final class AppModel {
         guard let client else { return }
         let result = try await client.send(["type": .string("lovelace/dashboards/list")])
         var listings = DashboardListing.list(from: result)
+        log.info("dashboards: \(listings.map(\.title).joined(separator: ", "), privacy: .public)")
         guard var chosen = settings.defaultDashboard(from: listings) else { return }
 
         // A dashboard whose config cannot be read is not pickable; drop it and
@@ -189,6 +190,7 @@ final class AppModel {
                 chosen = next
             }
         }
+        log.info("selected dashboard: \(chosen.title, privacy: .public)")
         update {
             $0.dashboards = listings
             $0.selected = chosen
