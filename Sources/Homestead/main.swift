@@ -18,6 +18,9 @@ final class App: NSObject, NSApplicationDelegate {
     /// proportional meters are not offered.
     private let appearance = MeterAppearance(defaultStyle: .character)
     private var appearanceMenu: AppearanceMenu!
+    private var connectionWindow: ConnectionWindowController?
+    private(set) var model: AppModel!
+    private var menuController: MenuController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         status = StatusItemController(
@@ -36,20 +39,28 @@ final class App: NSObject, NSApplicationDelegate {
                                         styles: [.character, .dot],
                                         characterTitle: "House",
                                         onChange: { [weak self] in self?.refreshIcon() })
+
+        model = AppModel(settings: settings)
+        menuController = MenuController(
+            model: model,
+            addSettingsItems: { [weak self] menu in self?.addSettingsItems(to: menu) },
+            onOpenConnection: { [weak self] in self?.openConnection() }
+        )
+        model.onSnapshotChange = { [weak self] _ in
+            self?.refreshIcon()
+            self?.menuController.rebuildIfOpen()
+        }
+        model.onEntitiesChanged = { [weak self] entities in
+            self?.menuController.apply(entities: entities)
+        }
+        model.start()
         refreshIcon()
     }
 
     // MARK: - Menu
 
     private func buildMenu(_ menu: NSMenu) {
-        if settings.haURL == nil {
-            let connect = NSMenuItem(title: "Connect to Home Assistant…",
-                                     action: #selector(openConnection), keyEquivalent: "")
-            connect.target = self
-            menu.addItem(connect)
-            menu.addItem(.separator())
-        }
-        addSettingsItems(to: menu)
+        menuController.build(menu)
     }
 
     func addSettingsItems(to menu: NSMenu) {
@@ -75,16 +86,25 @@ final class App: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleSensors() {
-        settings.showSensors.toggle()
+        model.setShowSensors(!settings.showSensors)
+        menuController.rebuildIfOpen()
     }
 
     @objc private func toggleLogin() {
         LoginItem.toggle()
     }
 
-    /// Replaced in Task 7, once the Connection window exists.
     @objc func openConnection() {
-        log.info("Connection window requested")
+        if connectionWindow == nil {
+            connectionWindow = ConnectionWindowController(settings: settings) { [weak self] in
+                self?.connectionSaved()
+            }
+        }
+        connectionWindow?.show()
+    }
+
+    func connectionSaved() {
+        model.reloadConfiguration()
     }
 
     // MARK: - Icon
