@@ -23,6 +23,9 @@ final class App: NSObject, NSApplicationDelegate {
     private var menuController: MenuController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Before any window opens: it is what makes ⌘V work in them.
+        MainMenu.install()
+
         status = StatusItemController(
             // Nothing is polled: state arrives on the socket. The timer is the
             // fallback that redraws the icon if a push is ever missed.
