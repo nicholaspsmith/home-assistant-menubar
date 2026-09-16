@@ -1,6 +1,12 @@
 import AppKit
 import HomesteadCore
 
+/// A scroll view's document view has to be flipped, or its rows stack up from
+/// the bottom of the scroller and start scrolled to the end.
+private final class FlippedStackView: NSStackView {
+    override var isFlipped: Bool { true }
+}
+
 /// Ticks which dashboards the picker offers. Home Assistant happily holds
 /// dozens; a menu is not the place to scroll through all of them, and which few
 /// matter is a question only the person using it can answer.
@@ -12,7 +18,7 @@ final class DashboardsWindowController: NSWindowController {
     private let settings: Settings
     private let onChange: () -> Void
     private var checkboxes: [NSButton] = []
-    private let stack = NSStackView()
+    private let stack = FlippedStackView()
 
     init(settings: Settings, onChange: @escaping () -> Void) {
         self.settings = settings
@@ -48,6 +54,7 @@ final class DashboardsWindowController: NSWindowController {
         caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         caption.textColor = .secondaryLabelColor
 
+        stack.translatesAutoresizingMaskIntoConstraints = false
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
@@ -72,7 +79,19 @@ final class DashboardsWindowController: NSWindowController {
             scroll.topAnchor.constraint(equalTo: caption.bottomAnchor, constant: 10),
             scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
 
-            stack.widthAnchor.constraint(equalTo: scroll.widthAnchor),
+            // Pin the stack to the CLIP view, never to the scroll view: tying
+            // its width to the scroll view makes width circular (the scroll
+            // sizes to its content, the content to the scroll), and autolayout
+            // settles that at zero — which collapsed this window to 40pt with
+            // nothing visible in it.
+            stack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+
+            // Nothing inside has an intrinsic width, so the window needs a size
+            // of its own to keep. minSize only limits dragging, not layout.
+            content.widthAnchor.constraint(greaterThanOrEqualToConstant: 320),
+            content.heightAnchor.constraint(greaterThanOrEqualToConstant: 260),
         ])
     }
 
