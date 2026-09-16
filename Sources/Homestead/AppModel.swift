@@ -47,6 +47,9 @@ final class AppModel {
     private var reconnectAttempt = 0
     private var reconnectTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
+    /// Every dashboard Home Assistant reports, before the visibility filter —
+    /// the Dashboards window needs the full list to tick from.
+    private(set) var allDashboards: [DashboardListing] = []
     /// Per-entity in-flight level call, so a drag sends one call at a time.
     private var levelInFlight: Set<String> = []
     private var levelQueued: [String: Double] = [:]
@@ -93,6 +96,22 @@ final class AppModel {
         settings.selectedDashboardPath = dashboard.urlPath ?? ""
         update { $0.selected = dashboard }
         Task { await loadDashboardLoggingErrors(dashboard) }
+    }
+
+    /// The Dashboards window changed which dashboards are offered.
+    func refreshVisibleDashboards() {
+        let listings = settings.visible(from: allDashboards)
+        let selected = listings.contains { $0.urlPath == snapshot.selected?.urlPath }
+            ? snapshot.selected
+            : settings.defaultDashboard(from: listings)
+        update {
+            $0.dashboards = listings
+            $0.selected = selected
+        }
+        // Hiding the dashboard you were on moves you to another one.
+        if let selected, selected.urlPath != snapshot.selected?.urlPath || snapshot.groups.isEmpty {
+            Task { await loadDashboardLoggingErrors(selected) }
+        }
     }
 
     func setShowSensors(_ on: Bool) {
@@ -172,8 +191,10 @@ final class AppModel {
     private func loadDashboards() async throws {
         guard let client else { return }
         let result = try await client.send(["type": .string("lovelace/dashboards/list")])
-        var listings = DashboardListing.list(from: result)
-        log.info("dashboards: \(listings.map(\.title).joined(separator: ", "), privacy: .public)")
+        let all = DashboardListing.list(from: result)
+        allDashboards = all
+        log.info("dashboards: \(all.map(\.title).joined(separator: ", "), privacy: .public)")
+        var listings = settings.visible(from: all)
         guard var chosen = settings.defaultDashboard(from: listings) else { return }
 
         // A dashboard whose config cannot be read is not pickable; drop it and

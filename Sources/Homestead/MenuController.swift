@@ -18,6 +18,9 @@ final class MenuController: NSObject {
     private var rows: [String: (item: NSMenuItem, view: DeviceRowView)] = [:]
     private var sliders: [String: (item: NSMenuItem, view: LevelSliderView)] = [:]
     private var devices: [String: Device] = [:]
+    /// Whether the dashboard list is showing. Reset whenever the menu closes,
+    /// so it always opens on the devices.
+    private var pickerExpanded = false
 
     init(model: AppModel,
          addSettingsItems: @escaping (NSMenu) -> Void,
@@ -29,6 +32,11 @@ final class MenuController: NSObject {
     }
 
     // MARK: - Building
+
+    /// Called when the menu closes, so the next open starts on the devices.
+    func menuClosed() {
+        pickerExpanded = false
+    }
 
     func build(_ menu: NSMenu) {
         self.menu = menu
@@ -51,14 +59,14 @@ final class MenuController: NSObject {
         addPicker(to: menu, snapshot: snapshot)
         addStatusRow(to: menu, snapshot: snapshot)
 
-        if snapshot.groups.isEmpty, snapshot.connection == .connected {
+        if snapshot.groups.isEmpty, snapshot.connection == .connected, !pickerExpanded {
             let empty = NSMenuItem(title: "No controllable devices on this dashboard",
                                    action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
         }
 
-        for group in snapshot.groups {
+        for group in pickerExpanded ? [] : snapshot.groups {
             let header = NSMenuItem(title: group.title.uppercased(), action: nil, keyEquivalent: "")
             header.isEnabled = false
             menu.addItem(header)
@@ -92,27 +100,33 @@ final class MenuController: NSObject {
         addSettingsItems(menu)
     }
 
-    /// The dashboard picker is a submenu, not an NSPopUpButton: while a menu is
-    /// tracking it owns the mouse, so a click never reaches a popup button's own
-    /// tracking loop — and when one is opened programmatically it dismisses the
-    /// menu it lives in. A submenu is the native way to offer a choice inside a
-    /// menu. Picking one closes the menu (standard NSMenuItem behaviour); the
-    /// chosen dashboard is remembered, so the next open lands on it.
+    /// The dashboard picker expands in place rather than opening a submenu or a
+    /// popup button. A popup button cannot be clicked at all while a menu is
+    /// tracking (the menu owns the mouse), and a submenu would dismiss the whole
+    /// menu on selection. View-based rows do neither: a click runs their handler
+    /// and the menu stays open, so choosing a dashboard swaps the device rows
+    /// under the pointer. While the list is expanded the device rows are hidden,
+    /// which keeps the menu from becoming a two-screen-tall list.
     private func addPicker(to menu: NSMenu, snapshot: Snapshot) {
         let title = snapshot.selected?.title ?? "Dashboard"
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.isEnabled = !snapshot.dashboards.isEmpty
-
-        let submenu = NSMenu()
-        for (index, dashboard) in snapshot.dashboards.enumerated() {
-            let choice = NSMenuItem(title: dashboard.title, action: #selector(dashboardChosen(_:)), keyEquivalent: "")
-            choice.target = self
-            choice.tag = index
-            choice.state = dashboard.urlPath == snapshot.selected?.urlPath ? .on : .off
-            submenu.addItem(choice)
+        let headerItem = NSMenuItem()
+        headerItem.view = DashboardHeaderView(title: title, expanded: pickerExpanded) { [weak self] in
+            guard let self, !self.model.snapshot.dashboards.isEmpty else { return }
+            self.pickerExpanded.toggle()
+            self.rebuildIfOpen()
         }
-        item.submenu = submenu
-        menu.addItem(item)
+        menu.addItem(headerItem)
+
+        if pickerExpanded {
+            for dashboard in snapshot.dashboards {
+                let item = NSMenuItem()
+                item.view = DashboardRowView(title: dashboard.title,
+                                             isCurrent: dashboard.urlPath == snapshot.selected?.urlPath) { [weak self] in
+                    self?.choose(dashboard)
+                }
+                menu.addItem(item)
+            }
+        }
         menu.addItem(.separator())
     }
 
@@ -181,9 +195,12 @@ final class MenuController: NSObject {
         sliders[device.entityId]?.item.isHidden = !on
     }
 
-    @objc private func dashboardChosen(_ sender: NSMenuItem) {
-        guard model.snapshot.dashboards.indices.contains(sender.tag) else { return }
-        model.select(dashboard: model.snapshot.dashboards[sender.tag])
+    private func choose(_ dashboard: DashboardListing) {
+        pickerExpanded = false
+        model.select(dashboard: dashboard)
+        // The devices for the new dashboard arrive with its state; rebuild now
+        // so the list collapses immediately rather than at the next event.
+        rebuildIfOpen()
     }
 
     @objc private func retry() {

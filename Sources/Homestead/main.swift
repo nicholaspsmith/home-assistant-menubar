@@ -19,6 +19,7 @@ final class App: NSObject, NSApplicationDelegate {
     private let appearance = MeterAppearance(defaultStyle: .character)
     private var appearanceMenu: AppearanceMenu!
     private var connectionWindow: ConnectionWindowController?
+    private var dashboardsWindow: DashboardsWindowController?
     private(set) var model: AppModel!
     private var menuController: MenuController!
 
@@ -56,6 +57,7 @@ final class App: NSObject, NSApplicationDelegate {
         model.onEntitiesChanged = { [weak self] entities in
             self?.menuController.apply(entities: entities)
         }
+        status.onMenuDidClose = { [weak self] in self?.menuController.menuClosed() }
         model.start()
         refreshIcon()
     }
@@ -78,6 +80,11 @@ final class App: NSObject, NSApplicationDelegate {
         menu.addItem(login)
 
         menu.addItem(appearanceMenu.menuItem())
+
+        let dashboards = NSMenuItem(title: "Dashboards…", action: #selector(openDashboards), keyEquivalent: "")
+        dashboards.target = self
+        dashboards.isEnabled = !model.allDashboards.isEmpty
+        menu.addItem(dashboards)
 
         let connection = NSMenuItem(title: "Connection…", action: #selector(openConnection), keyEquivalent: "")
         connection.target = self
@@ -108,6 +115,15 @@ final class App: NSObject, NSApplicationDelegate {
 
     func connectionSaved() {
         model.reloadConfiguration()
+    }
+
+    @objc func openDashboards() {
+        if dashboardsWindow == nil {
+            dashboardsWindow = DashboardsWindowController(settings: settings) { [weak self] in
+                self?.model.refreshVisibleDashboards()
+            }
+        }
+        dashboardsWindow?.show(dashboards: model.allDashboards)
     }
 
     // MARK: - Icon

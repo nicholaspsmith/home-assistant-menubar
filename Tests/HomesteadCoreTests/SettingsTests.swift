@@ -81,4 +81,57 @@ final class SettingsTests: XCTestCase {
         ]
         XCTAssertEqual(settings.defaultDashboard(from: listings)?.title, "Overview")
     }
+
+    // MARK: - Visible dashboards
+
+    func testAllDashboardsAreVisibleByDefault() {
+        let listings = [
+            DashboardListing(urlPath: "my-home", title: "My Home"),
+            DashboardListing(urlPath: "garden", title: "Garden"),
+        ]
+        XCTAssertEqual(Settings(defaults: defaults).visible(from: listings), listings)
+    }
+
+    func testOnlyChosenDashboardsAreVisible() {
+        let settings = Settings(defaults: defaults)
+        settings.visibleDashboardPaths = ["my-home", "spa"]
+
+        let listings = [
+            DashboardListing(urlPath: "my-home", title: "My Home"),
+            DashboardListing(urlPath: "garden", title: "Garden"),
+            DashboardListing(urlPath: "spa", title: "Hot Tub"),
+        ]
+        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["my-home", "spa"])
+    }
+
+    func testVisibleKeepsTheDashboardsOwnOrderNotTheChoiceOrder() {
+        let settings = Settings(defaults: defaults)
+        settings.visibleDashboardPaths = ["spa", "my-home"]
+
+        let listings = [
+            DashboardListing(urlPath: "my-home", title: "My Home"),
+            DashboardListing(urlPath: "spa", title: "Hot Tub"),
+        ]
+        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["my-home", "spa"])
+    }
+
+    func testChoosingNoneShowsEverythingRatherThanAnEmptyMenu() {
+        let settings = Settings(defaults: defaults)
+        settings.visibleDashboardPaths = []
+        let listings = [DashboardListing(urlPath: "my-home", title: "My Home")]
+        XCTAssertEqual(settings.visible(from: listings), listings)
+    }
+
+    func testChoicesForDashboardsThatNoLongerExistAreIgnored() {
+        let settings = Settings(defaults: defaults)
+        settings.visibleDashboardPaths = ["deleted", "my-home"]
+        let listings = [DashboardListing(urlPath: "my-home", title: "My Home")]
+        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["my-home"])
+    }
+
+    func testVisibleChoicesRoundTrip() {
+        let settings = Settings(defaults: defaults)
+        settings.visibleDashboardPaths = ["a", "b"]
+        XCTAssertEqual(Settings(defaults: defaults).visibleDashboardPaths, ["a", "b"])
+    }
 }
