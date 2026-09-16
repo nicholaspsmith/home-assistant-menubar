@@ -6,9 +6,13 @@ import HomesteadCore
 /// it is being dragged.
 final class LevelSliderView: NSView {
     private let slider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
+    private let captionLabel = NSTextField(labelWithString: "")
     private let onChange: (Double) -> Void
 
-    init(kind: DeviceKind, fraction: Double, onChange: @escaping (Double) -> Void) {
+    /// - Parameter caption: shown at the trailing end, for a slider whose value
+    ///   is not already on the row above it — a thermostat's target, where the
+    ///   row shows the current reading instead.
+    init(kind: DeviceKind, fraction: Double, caption: String? = nil, onChange: @escaping (Double) -> Void) {
         self.onChange = onChange
         super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 24))
 
@@ -24,28 +28,45 @@ final class LevelSliderView: NSView {
         low.contentTintColor = .secondaryLabelColor
         high.contentTintColor = .secondaryLabelColor
 
-        for view in [low, high, slider] {
+        captionLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize(for: .small), weight: .regular)
+        captionLabel.textColor = .secondaryLabelColor
+        captionLabel.alignment = .right
+        captionLabel.stringValue = caption ?? ""
+        captionLabel.isHidden = caption == nil
+
+        for view in [low, high, slider, captionLabel] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
-        NSLayoutConstraint.activate([
+        var constraints: [NSLayoutConstraint] = [
             low.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 26),
             low.centerYAnchor.constraint(equalTo: centerYAnchor),
             low.widthAnchor.constraint(equalToConstant: 14),
-            high.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            slider.leadingAnchor.constraint(equalTo: low.trailingAnchor, constant: 6),
+            slider.centerYAnchor.constraint(equalTo: centerYAnchor),
             high.centerYAnchor.constraint(equalTo: centerYAnchor),
             high.widthAnchor.constraint(equalToConstant: 14),
-            slider.leadingAnchor.constraint(equalTo: low.trailingAnchor, constant: 6),
             slider.trailingAnchor.constraint(equalTo: high.leadingAnchor, constant: -6),
-            slider.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
+        ]
+        if caption == nil {
+            constraints.append(high.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14))
+        } else {
+            constraints += [
+                high.trailingAnchor.constraint(equalTo: captionLabel.leadingAnchor, constant: -6),
+                captionLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+                captionLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+                captionLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            ]
+        }
+        NSLayoutConstraint.activate(constraints)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     /// Reflect a change made elsewhere — unless this slider is the thing being
     /// changed, in which case the drag wins.
-    func update(fraction: Double) {
+    func update(fraction: Double, caption: String? = nil) {
+        if let caption { captionLabel.stringValue = caption }
         guard !slider.isHighlighted else { return }
         slider.doubleValue = fraction
     }
@@ -54,6 +75,7 @@ final class LevelSliderView: NSView {
         switch kind {
         case .fan: return ("wind", "fanblades")
         case .cover: return ("blinds.horizontal.closed", "blinds.horizontal.open")
+        case .thermostat: return ("thermometer.low", "thermometer.high")
         default: return ("light.min", "light.max")
         }
     }

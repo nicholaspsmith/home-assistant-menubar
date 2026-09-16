@@ -18,6 +18,8 @@ struct Snapshot {
     var selected: DashboardListing?
     var groups: [DeviceGroup] = []
     var states: [String: EntityState] = [:]
+    /// How this Home Assistant writes temperatures, from its own config.
+    var temperatureUnit: String = "°"
 
     var lightsOn: Int {
         groups.flatMap(\.devices)
@@ -212,6 +214,7 @@ final class AppModel {
                 }
                 reconnectAttempt = 0
                 update { $0.connection = .connected }
+                await loadTemperatureUnit()
                 try await loadDashboards()
             } catch HAClientError.authInvalid {
                 update { $0.connection = .authFailed }
@@ -219,6 +222,15 @@ final class AppModel {
                 handleDrop(reason: error.localizedDescription)
             }
         }
+    }
+
+    /// A climate entity carries no unit of its own — the house has one.
+    private func loadTemperatureUnit() async {
+        guard let client,
+              let config = try? await client.send(["type": .string("get_config")]),
+              let unit = config["unit_system"]?["temperature"]?.string
+        else { return }
+        update { $0.temperatureUnit = unit }
     }
 
     private func loadDashboards() async throws {

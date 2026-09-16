@@ -82,6 +82,7 @@ final class MenuController: NSObject, NSWindowDelegate {
                 let rowView = DeviceRowView(
                     device: device,
                     state: state,
+                    temperatureUnit: snapshot.temperatureUnit,
                     onToggle: { [weak self] on in self?.toggled(device, on: on) },
                     onPickColor: canPickColor ? { [weak self] in self?.pickColor(for: device) } : nil
                 )
@@ -91,8 +92,11 @@ final class MenuController: NSObject, NSWindowDelegate {
 
                 guard device.kind.hasSlider else { continue }
                 let sliderItem = NSMenuItem()
-                let sliderView = LevelSliderView(kind: device.kind,
-                                                 fraction: Self.fraction(device: device, state: state)) { [weak self] value in
+                let sliderView = LevelSliderView(
+                    kind: device.kind,
+                    fraction: Self.fraction(device: device, state: state),
+                    caption: Self.sliderCaption(device: device, state: state, snapshot: snapshot)
+                ) { [weak self] value in
                     self?.model.setLevel(device, fraction: value)
                 }
                 sliderItem.view = sliderView
@@ -171,7 +175,8 @@ final class MenuController: NSObject, NSWindowDelegate {
 
             guard let slider = sliders[entityId] else { continue }
             slider.item.isHidden = !(state?.isOn ?? false)
-            slider.view.update(fraction: Self.fraction(device: device, state: state))
+            slider.view.update(fraction: Self.fraction(device: device, state: state),
+                               caption: Self.sliderCaption(device: device, state: state, snapshot: model.snapshot))
         }
     }
 
@@ -189,8 +194,20 @@ final class MenuController: NSObject, NSWindowDelegate {
         case .light: return LevelMath.fraction(brightness: state.attributes["brightness"])
         case .fan: return LevelMath.fraction(percentage: state.attributes["percentage"])
         case .cover: return LevelMath.fraction(percentage: state.attributes["current_position"])
+        case .thermostat:
+            // The slider sets the target, so it sits where the target is — not
+            // where the room currently happens to be.
+            guard let target = TemperatureRange.target(of: state) else { return 0 }
+            return TemperatureRange(state: state).fraction(of: target)
         case .toggle, .sensor: return 0
         }
+    }
+
+    /// A thermostat's slider says what temperature it is setting; a brightness
+    /// slider needs no caption, since the row already shows the percentage.
+    private static func sliderCaption(device: Device, state: EntityState?, snapshot: Snapshot) -> String? {
+        guard device.kind == .thermostat, let target = TemperatureRange.target(of: state) else { return nil }
+        return TemperatureRange.format(target) + snapshot.temperatureUnit
     }
 
     // MARK: - Actions

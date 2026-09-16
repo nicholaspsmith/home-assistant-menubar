@@ -13,6 +13,8 @@ final class DeviceRowView: NSView {
     private let swatch = NSButton()
     private let onToggle: (Bool) -> Void
     private let onPickColor: (() -> Void)?
+    /// How Home Assistant writes temperatures for this house, e.g. "°C".
+    private let temperatureUnit: String
 
     var switchIsOn: Bool { toggle.state == .on }
 
@@ -20,11 +22,13 @@ final class DeviceRowView: NSView {
     ///   takes a colour; the row then shows a swatch that opens the picker.
     init(device: Device,
          state: EntityState?,
+         temperatureUnit: String = "°",
          onToggle: @escaping (Bool) -> Void,
          onPickColor: (() -> Void)? = nil) {
         self.device = device
         self.onToggle = onToggle
         self.onPickColor = onPickColor
+        self.temperatureUnit = temperatureUnit
         nameLabel = NSTextField(labelWithString: device.displayName)
         super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: 26))
 
@@ -91,7 +95,9 @@ final class DeviceRowView: NSView {
         toggle.isEnabled = available
         toggle.state = (state?.isOn ?? false) ? .on : .off
         nameLabel.textColor = available ? .labelColor : .tertiaryLabelColor
-        valueLabel.stringValue = available ? Self.valueText(device: device, state: state) : "Unavailable"
+        valueLabel.stringValue = available
+            ? Self.valueText(device: device, state: state, temperatureUnit: temperatureUnit)
+            : "Unavailable"
 
         if onPickColor != nil {
             swatch.isEnabled = available
@@ -126,9 +132,11 @@ final class DeviceRowView: NSView {
         onPickColor?()
     }
 
-    static func valueText(device: Device, state: EntityState?) -> String {
+    static func valueText(device: Device, state: EntityState?, temperatureUnit: String = "°") -> String {
         guard let state else { return "" }
         switch device.kind {
+        case .thermostat:
+            return TemperatureRange.text(state: state, unit: temperatureUnit)
         case .light:
             guard state.isOn else { return "" }
             return "\(LevelMath.brightnessPct(from: LevelMath.fraction(brightness: state.attributes["brightness"])))%"

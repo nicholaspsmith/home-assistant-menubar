@@ -18,11 +18,17 @@ public struct EntityState: Equatable, Sendable {
     /// off the network does not silently vanish from the menu.
     public var isAvailable: Bool { state != "unavailable" && state != "unknown" }
 
-    /// Covers report travel states; treat anything but fully closed as open, so
-    /// the switch reflects where the cover is heading.
+    /// Covers report travel states, and a thermostat's state is its mode, so
+    /// "on" is only one of several ways an entity says it is doing something.
+    /// Treat anything but fully closed or off as on, so the row's switch
+    /// reflects whether the device is working.
     public var isOn: Bool {
         switch state {
         case "on", "open", "opening", "closing": return true
+        // climate hvac modes and water_heater operation modes.
+        case "heat", "cool", "auto", "heat_cool", "dry", "fan_only",
+             "eco", "electric", "gas", "heat_pump", "high_demand", "performance":
+            return true
         default: return false
         }
     }

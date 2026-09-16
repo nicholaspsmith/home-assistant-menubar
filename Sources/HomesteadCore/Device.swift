@@ -7,13 +7,16 @@ public enum DeviceKind: Equatable, Sendable {
     case toggle
     /// `positionable` means the cover reports SET_POSITION, so it gets a slider.
     case cover(positionable: Bool)
+    /// A `climate` or `water_heater` entity: a reading, a target, and a band to
+    /// set it in.
+    case thermostat
     case sensor
 
     public var hasSwitch: Bool { self != .sensor }
 
     public var hasSlider: Bool {
         switch self {
-        case .light, .fan: return true
+        case .light, .fan, .thermostat: return true
         case .cover(let positionable): return positionable
         case .toggle, .sensor: return false
         }
@@ -81,6 +84,7 @@ public enum DeviceCatalog {
         case "cover":
             let features = state?.attributes["supported_features"]?.int ?? 0
             return .cover(positionable: features & coverSetPosition != 0)
+        case "climate", "water_heater": return .thermostat
         case "sensor", "binary_sensor": return .sensor
         default: return nil
         }

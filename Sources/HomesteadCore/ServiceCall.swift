@@ -16,7 +16,7 @@ public struct ServiceCall: Equatable, Sendable {
 
     public static func toggle(_ device: Device, on: Bool) -> ServiceCall? {
         switch device.kind {
-        case .light, .fan, .toggle:
+        case .light, .fan, .toggle, .thermostat:
             return ServiceCall(domain: device.domain, service: on ? "turn_on" : "turn_off",
                                entityId: device.entityId, serviceData: [:])
         case .cover:
@@ -43,6 +43,11 @@ public struct ServiceCall: Equatable, Sendable {
             guard positionable else { return nil }
             return ServiceCall(domain: "cover", service: "set_cover_position", entityId: device.entityId,
                                serviceData: ["position": .number(Double(LevelMath.coverPosition(from: fraction)))])
+        case .thermostat:
+            // climate and water_heater take the same call under their own names.
+            let range = TemperatureRange(state: state)
+            return ServiceCall(domain: device.domain, service: "set_temperature", entityId: device.entityId,
+                               serviceData: ["temperature": .number(range.temperature(at: fraction))])
         case .toggle, .sensor:
             return nil
         }
