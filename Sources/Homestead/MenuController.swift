@@ -17,6 +17,7 @@ final class MenuController: NSObject, NSWindowDelegate {
     private weak var menu: NSMenu?
     private var rows: [String: (item: NSMenuItem, view: DeviceRowView)] = [:]
     private var sliders: [String: (item: NSMenuItem, view: LevelSliderView)] = [:]
+    private var warmthSliders: [String: (item: NSMenuItem, view: LevelSliderView)] = [:]
     private var devices: [String: Device] = [:]
     /// Whether the dashboard list is showing. Reset whenever the menu closes,
     /// so it always opens on the devices.
@@ -44,6 +45,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         self.menu = menu
         rows.removeAll()
         sliders.removeAll()
+        warmthSliders.removeAll()
         devices.removeAll()
 
         let snapshot = model.snapshot
@@ -93,16 +95,33 @@ final class MenuController: NSObject, NSWindowDelegate {
                 guard device.kind.hasSlider else { continue }
                 let sliderItem = NSMenuItem()
                 let sliderView = LevelSliderView(
-                    kind: device.kind,
+                    style: .level(device.kind),
                     fraction: Self.fraction(device: device, state: state),
                     caption: Self.sliderCaption(device: device, state: state, snapshot: snapshot)
                 ) { [weak self] value in
                     self?.model.setLevel(device, fraction: value)
                 }
                 sliderItem.view = sliderView
-                sliderItem.isHidden = !(state?.isOn ?? false)
+                sliderItem.isHidden = Self.sliderIsHidden(device: device, state: state)
                 menu.addItem(sliderItem)
                 sliders[device.entityId] = (sliderItem, sliderView)
+
+                // A tunable-white bulb gets a second slider. Colour and warmth
+                // are different questions: the picker cannot express a precise
+                // white, and this cannot express a colour.
+                guard device.kind == .light, LightCapabilities.supportsColorTemperature(state) else { continue }
+                let warmthItem = NSMenuItem()
+                let warmthView = LevelSliderView(
+                    style: .warmth,
+                    fraction: Self.warmthFraction(state: state),
+                    caption: Self.warmthCaption(state: state)
+                ) { [weak self] value in
+                    self?.model.setColorTemperature(device, fraction: value)
+                }
+                warmthItem.view = warmthView
+                warmthItem.isHidden = Self.sliderIsHidden(device: device, state: state)
+                menu.addItem(warmthItem)
+                warmthSliders[device.entityId] = (warmthItem, warmthView)
             }
         }
 
@@ -173,10 +192,16 @@ final class MenuController: NSObject, NSWindowDelegate {
             let state = model.state(for: entityId)
             rows[entityId]?.view.update(state: state)
 
-            guard let slider = sliders[entityId] else { continue }
-            slider.item.isHidden = !(state?.isOn ?? false)
-            slider.view.update(fraction: Self.fraction(device: device, state: state),
-                               caption: Self.sliderCaption(device: device, state: state, snapshot: model.snapshot))
+            if let slider = sliders[entityId] {
+                slider.item.isHidden = Self.sliderIsHidden(device: device, state: state)
+                slider.view.update(fraction: Self.fraction(device: device, state: state),
+                                   caption: Self.sliderCaption(device: device, state: state, snapshot: model.snapshot))
+            }
+            if let warmth = warmthSliders[entityId] {
+                warmth.item.isHidden = Self.sliderIsHidden(device: device, state: state)
+                warmth.view.update(fraction: Self.warmthFraction(state: state),
+                                   caption: Self.warmthCaption(state: state))
+            }
         }
     }
 
@@ -186,6 +211,25 @@ final class MenuController: NSObject, NSWindowDelegate {
         guard let menu, !menu.items.isEmpty else { return }
         menu.removeAllItems()
         build(menu)
+    }
+
+    /// A level slider is only useful while the device is doing something —
+    /// except a thermostat's, where the set point matters whether or not it is
+    /// currently heating, and is usually what you want to change before
+    /// turning it on.
+    private static func sliderIsHidden(device: Device, state: EntityState?) -> Bool {
+        guard device.kind != .thermostat else { return false }
+        return !(state?.isOn ?? false)
+    }
+
+    private static func warmthFraction(state: EntityState?) -> Double {
+        guard let kelvin = ColorTemperatureRange.current(of: state) else { return 0.5 }
+        return ColorTemperatureRange(state: state).fraction(of: kelvin)
+    }
+
+    private static func warmthCaption(state: EntityState?) -> String {
+        guard let kelvin = ColorTemperatureRange.current(of: state) else { return "" }
+        return "\(Int(kelvin))K"
     }
 
     private static func fraction(device: Device, state: EntityState?) -> Double {
@@ -214,8 +258,10 @@ final class MenuController: NSObject, NSWindowDelegate {
 
     private func toggled(_ device: Device, on: Bool) {
         model.toggle(device, on: on)
-        // Show the slider immediately; the confirming state event follows.
+        // Show the sliders immediately; the confirming state event follows.
+        guard device.kind != .thermostat else { return }
         sliders[device.entityId]?.item.isHidden = !on
+        warmthSliders[device.entityId]?.item.isHidden = !on
     }
 
     private func choose(_ dashboard: DashboardListing) {

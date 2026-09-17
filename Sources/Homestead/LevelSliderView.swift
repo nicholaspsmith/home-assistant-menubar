@@ -1,6 +1,24 @@
 import AppKit
 import HomesteadCore
 
+/// What a slider row is for. A light can have two of them — brightness and
+/// warmth — so the row cannot take its identity from the device's kind alone.
+enum SliderStyle: Equatable {
+    case level(DeviceKind)
+    /// Warm white to daylight.
+    case warmth
+
+    var symbols: (low: String, high: String) {
+        switch self {
+        case .warmth: return ("sun.horizon", "sun.max")
+        case .level(.fan): return ("wind", "fanblades")
+        case .level(.cover): return ("blinds.horizontal.closed", "blinds.horizontal.open")
+        case .level(.thermostat): return ("thermometer.low", "thermometer.high")
+        case .level: return ("light.min", "light.max")
+        }
+    }
+}
+
 /// The slider that appears under a device while it is on. Modelled on
 /// KeyLight's backlight slider: continuous, and deaf to external updates while
 /// it is being dragged.
@@ -12,7 +30,7 @@ final class LevelSliderView: NSView {
     /// - Parameter caption: shown at the trailing end, for a slider whose value
     ///   is not already on the row above it — a thermostat's target, where the
     ///   row shows the current reading instead.
-    init(kind: DeviceKind, fraction: Double, caption: String? = nil, onChange: @escaping (Double) -> Void) {
+    init(style: SliderStyle, fraction: Double, caption: String? = nil, onChange: @escaping (Double) -> Void) {
         self.onChange = onChange
         super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 24))
 
@@ -22,7 +40,7 @@ final class LevelSliderView: NSView {
         slider.target = self
         slider.action = #selector(slid)
 
-        let (lowName, highName) = Self.symbols(for: kind)
+        let (lowName, highName) = style.symbols
         let low = NSImageView(image: NSImage(systemSymbolName: lowName, accessibilityDescription: nil) ?? NSImage())
         let high = NSImageView(image: NSImage(systemSymbolName: highName, accessibilityDescription: nil) ?? NSImage())
         low.contentTintColor = .secondaryLabelColor
@@ -69,15 +87,6 @@ final class LevelSliderView: NSView {
         if let caption { captionLabel.stringValue = caption }
         guard !slider.isHighlighted else { return }
         slider.doubleValue = fraction
-    }
-
-    private static func symbols(for kind: DeviceKind) -> (String, String) {
-        switch kind {
-        case .fan: return ("wind", "fanblades")
-        case .cover: return ("blinds.horizontal.closed", "blinds.horizontal.open")
-        case .thermostat: return ("thermometer.low", "thermometer.high")
-        default: return ("light.min", "light.max")
-        }
     }
 
     @objc private func slid() {

@@ -62,6 +62,15 @@ public struct ServiceCall: Equatable, Sendable {
                            serviceData: ["rgb_color": .array(channels)])
     }
 
+    /// Move a light along the warm-to-daylight white scale. Kelvin, not mireds:
+    /// Home Assistant accepts both, and kelvin is the one that reads the same
+    /// way round as the slider.
+    public static func setColorTemperature(_ device: Device, kelvin: Double) -> ServiceCall? {
+        guard device.kind == .light else { return nil }
+        return ServiceCall(domain: "light", service: "turn_on", entityId: device.entityId,
+                           serviceData: ["color_temp_kelvin": .number(kelvin.rounded())])
+    }
+
     /// The WebSocket command body, without the `id` the client assigns.
     public var commandPayload: [String: JSONValue] {
         var payload: [String: JSONValue] = [

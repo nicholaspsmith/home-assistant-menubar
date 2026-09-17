@@ -56,6 +56,7 @@ final class AppModel {
     private var levelInFlight: Set<String> = []
     private var levelQueued: [String: Double] = [:]
     private var colorQueued: [String: (red: Int, green: Int, blue: Int)] = [:]
+    private var warmthQueued: [String: Double] = [:]
     /// Set while a dashboard's first state snapshot is outstanding. Until it
     /// lands, the rows on screen belong to the *previous* dashboard, so its
     /// entities must rebuild the menu rather than be patched into rows that do
@@ -185,6 +186,32 @@ final class AppModel {
             }
         }
         guard let call = ServiceCall.setColor(device, red: red, green: green, blue: blue) else { return }
+        await perform(call, revertEntity: nil)
+    }
+
+    /// Warmth, driven from a slider, so coalesced like the others.
+    func setColorTemperature(_ device: Device, fraction: Double) {
+        let kelvin = ColorTemperatureRange(state: store[device.entityId]).kelvin(at: fraction)
+        guard ServiceCall.setColorTemperature(device, kelvin: kelvin) != nil else { return }
+        let key = "warmth:" + device.entityId
+        if levelInFlight.contains(key) {
+            warmthQueued[device.entityId] = fraction
+            return
+        }
+        levelInFlight.insert(key)
+        Task { await sendWarmth(device, fraction: fraction) }
+    }
+
+    private func sendWarmth(_ device: Device, fraction: Double) async {
+        defer {
+            if let next = warmthQueued.removeValue(forKey: device.entityId) {
+                Task { await sendWarmth(device, fraction: next) }
+            } else {
+                levelInFlight.remove("warmth:" + device.entityId)
+            }
+        }
+        let kelvin = ColorTemperatureRange(state: store[device.entityId]).kelvin(at: fraction)
+        guard let call = ServiceCall.setColorTemperature(device, kelvin: kelvin) else { return }
         await perform(call, revertEntity: nil)
     }
 
@@ -319,6 +346,11 @@ final class AppModel {
     private func rebuildGroups() {
         snapshot.states = store.states
         snapshot.groups = DeviceCatalog.build(refs: refs, states: store.states, showSensors: settings.showSensors)
+        let shown = snapshot.groups.flatMap(\.devices)
+        let shownIds = Set(shown.map(\.entityId))
+        let skipped = refs.map(\.entityId).filter { !shownIds.contains($0) }
+        let rowSummary = shown.map { "\($0.entityId)=\($0.kind)" }.joined(separator: ", ")
+        log.info("rows: \(rowSummary, privacy: .public) | skipped: \(skipped.joined(separator: ", "), privacy: .public)")
         onSnapshotChange?(snapshot)
     }
 
