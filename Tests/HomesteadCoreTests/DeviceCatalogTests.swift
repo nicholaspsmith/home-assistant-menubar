@@ -11,6 +11,7 @@ final class DeviceCatalogTests: XCTestCase {
         DeviceRef(entityId: "cover.blind", nameOverride: nil, header: "Office"),
         DeviceRef(entityId: "sensor.temperature", nameOverride: nil, header: "Office"),
         DeviceRef(entityId: "media_player.tv", nameOverride: nil, header: "Office"),
+        DeviceRef(entityId: "automation.sunset", nameOverride: nil, header: "Office"),
     ]
 
     private let states: [String: EntityState] = [
@@ -22,6 +23,7 @@ final class DeviceCatalogTests: XCTestCase {
         "cover.blind": EntityState(state: "closed", attributes: ["supported_features": .number(3)]),
         "sensor.temperature": EntityState(state: "21.5", attributes: ["unit_of_measurement": .string("°C")]),
         "media_player.tv": EntityState(state: "playing"),
+        "automation.sunset": EntityState(state: "on"),
     ]
 
     func testGroupsPreserveDashboardOrderAndHeaders() {
@@ -30,7 +32,7 @@ final class DeviceCatalogTests: XCTestCase {
         XCTAssertEqual(groups.map(\.title), ["Living Room", "Office"])
         XCTAssertEqual(groups[0].devices.map(\.entityId), ["light.ceiling", "fan.ceiling"])
         XCTAssertEqual(groups[1].devices.map(\.entityId),
-                       ["switch.heater", "input_boolean.guest", "cover.garage", "cover.blind"])
+                       ["switch.heater", "input_boolean.guest", "cover.garage", "cover.blind", "media_player.tv"])
     }
 
     func testKindsComeFromTheDomain() {
@@ -45,9 +47,11 @@ final class DeviceCatalogTests: XCTestCase {
         XCTAssertEqual(byId["cover.blind"], .cover(positionable: false))    // 3 is open+close only
     }
 
-    func testUnsupportedDomainsAreDropped() {
+    func testDomainsWithNothingToControlAreDropped() {
+        // An automation is a rule, not a device; its "on" says it is enabled.
         let ids = DeviceCatalog.build(refs: refs, states: states, showSensors: true).flatMap(\.devices).map(\.entityId)
-        XCTAssertFalse(ids.contains("media_player.tv"))
+        XCTAssertFalse(ids.contains("automation.sunset"))
+        XCTAssertTrue(ids.contains("media_player.tv"))
     }
 
     func testSensorsAppearOnlyWhenEnabled() {

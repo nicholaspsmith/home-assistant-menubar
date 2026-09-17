@@ -18,6 +18,7 @@ final class MenuController: NSObject, NSWindowDelegate {
     private var rows: [String: (item: NSMenuItem, view: DeviceRowView)] = [:]
     private var sliders: [String: (item: NSMenuItem, view: LevelSliderView)] = [:]
     private var warmthSliders: [String: (item: NSMenuItem, view: LevelSliderView)] = [:]
+    private var transportRows: [String: NSMenuItem] = [:]
     private var devices: [String: Device] = [:]
     /// Whether the dashboard list is showing. Reset whenever the menu closes,
     /// so it always opens on the devices.
@@ -46,6 +47,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         rows.removeAll()
         sliders.removeAll()
         warmthSliders.removeAll()
+        transportRows.removeAll()
         devices.removeAll()
 
         let snapshot = model.snapshot
@@ -92,6 +94,11 @@ final class MenuController: NSObject, NSWindowDelegate {
                 menu.addItem(rowItem)
                 rows[device.entityId] = (rowItem, rowView)
 
+                if device.kind == .mediaPlayer {
+                    addMediaControls(to: menu, device: device, state: state)
+                    continue
+                }
+
                 guard device.kind.hasSlider else { continue }
                 let sliderItem = NSMenuItem()
                 let sliderView = LevelSliderView(
@@ -136,6 +143,33 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// and the menu stays open, so choosing a dashboard swaps the device rows
     /// under the pointer. While the list is expanded the device rows are hidden,
     /// which keeps the menu from becoming a two-screen-tall list.
+    /// A player's controls are whatever it says it has: a TV with no transport
+    /// gets only a volume slider, a speaker with no volume only a play button.
+    private func addMediaControls(to menu: NSMenu, device: Device, state: EntityState?) {
+        let hidden = !(state?.isOn ?? false)
+
+        if MediaCapabilities.supportsVolume(state) {
+            let item = NSMenuItem()
+            let view = LevelSliderView(style: .level(.mediaPlayer),
+                                       fraction: MediaCapabilities.volume(of: state) ?? 0) { [weak self] value in
+                self?.model.setLevel(device, fraction: value)
+            }
+            item.view = view
+            item.isHidden = hidden
+            menu.addItem(item)
+            sliders[device.entityId] = (item, view)
+        }
+
+        guard MediaCapabilities.supportsPlayPause(state) || MediaCapabilities.supportsSkip(state) else { return }
+        let item = NSMenuItem()
+        item.view = TransportRowView(showsSkip: MediaCapabilities.supportsSkip(state)) { [weak self] control in
+            self?.model.transport(device, control)
+        }
+        item.isHidden = hidden
+        menu.addItem(item)
+        transportRows[device.entityId] = item
+    }
+
     private func addPicker(to menu: NSMenu, snapshot: Snapshot) {
         let title = snapshot.selected?.title ?? "Dashboard"
         let headerItem = NSMenuItem()
@@ -197,6 +231,7 @@ final class MenuController: NSObject, NSWindowDelegate {
                 slider.view.update(fraction: Self.fraction(device: device, state: state),
                                    caption: Self.sliderCaption(device: device, state: state, snapshot: model.snapshot))
             }
+            transportRows[entityId]?.isHidden = Self.sliderIsHidden(device: device, state: state)
             if let warmth = warmthSliders[entityId] {
                 warmth.item.isHidden = Self.sliderIsHidden(device: device, state: state)
                 warmth.view.update(fraction: Self.warmthFraction(state: state),
@@ -243,6 +278,7 @@ final class MenuController: NSObject, NSWindowDelegate {
             // where the room currently happens to be.
             guard let target = TemperatureRange.target(of: state) else { return 0 }
             return TemperatureRange(state: state).fraction(of: target)
+        case .mediaPlayer: return MediaCapabilities.volume(of: state) ?? 0
         case .toggle, .sensor: return 0
         }
     }
@@ -262,6 +298,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         guard device.kind != .thermostat else { return }
         sliders[device.entityId]?.item.isHidden = !on
         warmthSliders[device.entityId]?.item.isHidden = !on
+        transportRows[device.entityId]?.isHidden = !on
     }
 
     private func choose(_ dashboard: DashboardListing) {

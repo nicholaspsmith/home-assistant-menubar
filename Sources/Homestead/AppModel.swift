@@ -189,6 +189,12 @@ final class AppModel {
         await perform(call, revertEntity: nil)
     }
 
+    /// Transport is a single tap, not a drag: no coalescing to do.
+    func transport(_ device: Device, _ control: ServiceCall.Transport) {
+        guard let call = ServiceCall.transport(device, control) else { return }
+        Task { await perform(call, revertEntity: nil) }
+    }
+
     /// Warmth, driven from a slider, so coalesced like the others.
     func setColorTemperature(_ device: Device, fraction: Double) {
         let kelvin = ColorTemperatureRange(state: store[device.entityId]).kelvin(at: fraction)

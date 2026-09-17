@@ -137,6 +137,8 @@ final class DeviceRowView: NSView {
         switch device.kind {
         case .thermostat:
             return TemperatureRange.text(state: state, unit: temperatureUnit)
+        case .mediaPlayer:
+            return MediaCapabilities.text(state: state)
         case .light:
             guard state.isOn else { return "" }
             return "\(LevelMath.brightnessPct(from: LevelMath.fraction(brightness: state.attributes["brightness"])))%"

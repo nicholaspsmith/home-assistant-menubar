@@ -29,6 +29,10 @@ public struct EntityState: Equatable, Sendable {
         case "heat", "cool", "auto", "heat_cool", "dry", "fan_only",
              "eco", "electric", "gas", "heat_pump", "high_demand", "performance":
             return true
+        // media_player states. "standby" is deliberately off: a TV in standby
+        // is showing nothing and its volume cannot be set.
+        case "playing", "paused", "idle", "buffering":
+            return true
         default: return false
         }
     }

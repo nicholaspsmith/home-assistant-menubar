@@ -16,7 +16,7 @@ public struct ServiceCall: Equatable, Sendable {
 
     public static func toggle(_ device: Device, on: Bool) -> ServiceCall? {
         switch device.kind {
-        case .light, .fan, .toggle, .thermostat:
+        case .light, .fan, .toggle, .thermostat, .mediaPlayer:
             return ServiceCall(domain: device.domain, service: on ? "turn_on" : "turn_off",
                                entityId: device.entityId, serviceData: [:])
         case .cover:
@@ -43,6 +43,9 @@ public struct ServiceCall: Equatable, Sendable {
             guard positionable else { return nil }
             return ServiceCall(domain: "cover", service: "set_cover_position", entityId: device.entityId,
                                serviceData: ["position": .number(Double(LevelMath.coverPosition(from: fraction)))])
+        case .mediaPlayer:
+            return ServiceCall(domain: "media_player", service: "volume_set", entityId: device.entityId,
+                               serviceData: ["volume_level": .number(min(max(fraction, 0), 1))])
         case .thermostat:
             // climate and water_heater take the same call under their own names.
             let range = TemperatureRange(state: state)
@@ -60,6 +63,27 @@ public struct ServiceCall: Equatable, Sendable {
         let channels = [red, green, blue].map { JSONValue.number(Double($0.clamped(to: 0...255))) }
         return ServiceCall(domain: "light", service: "turn_on", entityId: device.entityId,
                            serviceData: ["rgb_color": .array(channels)])
+    }
+
+    /// The transport controls a player can offer.
+    public enum Transport: Equatable, Sendable {
+        case playPause
+        case previous
+        case next
+
+        var service: String {
+            switch self {
+            case .playPause: return "media_play_pause"
+            case .previous: return "media_previous_track"
+            case .next: return "media_next_track"
+            }
+        }
+    }
+
+    public static func transport(_ device: Device, _ control: Transport) -> ServiceCall? {
+        guard device.kind == .mediaPlayer else { return nil }
+        return ServiceCall(domain: "media_player", service: control.service,
+                           entityId: device.entityId, serviceData: [:])
     }
 
     /// Move a light along the warm-to-daylight white scale. Kelvin, not mireds:

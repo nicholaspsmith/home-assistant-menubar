@@ -14,6 +14,7 @@ enum SliderStyle: Equatable {
         case .level(.fan): return ("wind", "fanblades")
         case .level(.cover): return ("blinds.horizontal.closed", "blinds.horizontal.open")
         case .level(.thermostat): return ("thermometer.low", "thermometer.high")
+        case .level(.mediaPlayer): return ("speaker.fill", "speaker.wave.3.fill")
         case .level: return ("light.min", "light.max")
         }
     }

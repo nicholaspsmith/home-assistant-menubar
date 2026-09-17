@@ -7,6 +7,9 @@ public enum DeviceKind: Equatable, Sendable {
     case toggle
     /// `positionable` means the cover reports SET_POSITION, so it gets a slider.
     case cover(positionable: Bool)
+    /// A `media_player`: power, volume and transport, each offered only when
+    /// the entity reports it.
+    case mediaPlayer
     /// A `climate` or `water_heater` entity: a reading, a target, and a band to
     /// set it in.
     case thermostat
@@ -18,7 +21,9 @@ public enum DeviceKind: Equatable, Sendable {
         switch self {
         case .light, .fan, .thermostat: return true
         case .cover(let positionable): return positionable
-        case .toggle, .sensor: return false
+        // A player's volume slider depends on supported_features, so the menu
+        // adds it from the entity's state rather than from the kind alone.
+        case .mediaPlayer, .toggle, .sensor: return false
         }
     }
 }
@@ -80,7 +85,8 @@ public enum DeviceCatalog {
         switch String(entityId.prefix(while: { $0 != "." })) {
         case "light": return .light
         case "fan": return .fan
-        case "switch", "input_boolean": return .toggle
+        case "switch", "input_boolean", "remote": return .toggle
+        case "media_player": return .mediaPlayer
         case "cover":
             let features = state?.attributes["supported_features"]?.int ?? 0
             return .cover(positionable: features & coverSetPosition != 0)
