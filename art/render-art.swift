@@ -133,7 +133,7 @@ func fanBlades(centre: CGPoint, radius: CGFloat) -> CGPath {
 
 /// The states strip for the README, in the same dark tile the other repos use.
 func menuBarStrip(states: [NSImage]) -> NSImage {
-    let cell: CGFloat = 108, height: CGFloat = 96
+    let cell: CGFloat = 132, height: CGFloat = 104
     return image(width: cell * CGFloat(states.count), height: height) { context in
         let tile = CGRect(x: 0, y: 0, width: cell * CGFloat(states.count), height: height)
         context.addPath(CGPath(roundedRect: tile, cornerWidth: 18, cornerHeight: 18, transform: nil))
@@ -141,7 +141,9 @@ func menuBarStrip(states: [NSImage]) -> NSImage {
         context.fillPath()
 
         for (index, state) in states.enumerated() {
-            let box = CGRect(x: CGFloat(index) * cell + (cell - 52) / 2, y: (height - 52) / 2, width: 52, height: 52)
+            // Drawn at 2x, which is the density the glyph is designed for.
+            let w = state.size.width * 2, h = state.size.height * 2
+            let box = CGRect(x: CGFloat(index) * cell + (cell - w) / 2, y: (height - h) / 2, width: w, height: h)
             state.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1,
                        respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high.rawValue])
         }

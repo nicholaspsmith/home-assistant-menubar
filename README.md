@@ -11,7 +11,7 @@ picker for bulbs that have one, and transport controls for media players.
 Nothing closes the menu, so you can turn three things on without opening it
 three times.
 
-<p align="center"><img src="docs/menubar-icon.png" width="440" alt="The menu-bar glyph: dark house, one window lit, both lit, a fan turning, and hollow when unreachable"></p>
+<p align="center"><img src="docs/menubar-icon.png" width="440" alt="The menu-bar glyph: a cottage with dark windows, one window lit, both lit, a fan turning in one, and hollow when unreachable"></p>
 
 The glyph carries the state: windows light with the number of lights on in the
 selected dashboard, a fan turns in the right window while any fan is running,
@@ -91,9 +91,10 @@ macOS's superellipse tile at Apple's clear-space ratio and builds the `.icns`,
 because that half is geometry rather than taste. The mascot comes from the same
 pipeline the rest of the Menubarn cast uses
 (`widgets.nicksmith.software/art/gen_icons.py homestead`). The menu-bar glyph is
-drawn in code and always will be — it is 22pt, it has to stay sharp on a
-non-Retina bar, and it changes with live state, none of which a generated raster
-can do.
+drawn in code and always will be: it changes with live state, which a generated
+raster cannot. It is drawn for a Retina bar — half-point sills, mullions and
+shingle courses land on half pixels at 2x — and anyone on a non-Retina display
+can pick the plain Dot in **Icon ▸**.
 
 `HomesteadCore` holds everything that can be tested without a screen — the
 WebSocket protocol, the dashboard parser, the state store, unit conversions and
