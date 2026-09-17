@@ -2,3 +2,5 @@
 build/
 .superpowers/
 .DS_Store
+art/build/
+art/Homestead.iconset/

@@ -26,5 +26,7 @@ First-run setup
      token, press Test, then Save.
   4. Optional: menu ▸ Start at Login.
 
-The token is stored in your login Keychain, never on disk in plain text.
+The token is stored in your login Keychain. (Developers rebuilding the app can
+swap that for a 0600 file to stop the per-rebuild password prompt — see the
+README's Development section.)
 EOF
