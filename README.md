@@ -11,11 +11,11 @@ picker for bulbs that have one, and transport controls for media players.
 Nothing closes the menu, so you can turn three things on without opening it
 three times.
 
-<p align="center"><img src="docs/menubar-icon.png" width="440" alt="The menu-bar glyph: dark house, one window lit, both lit, a fan turning, and dashed when unreachable"></p>
+<p align="center"><img src="docs/menubar-icon.png" width="440" alt="The menu-bar glyph: dark house, one window lit, both lit, a fan turning, and hollow when unreachable"></p>
 
 The glyph carries the state: windows light with the number of lights on in the
 selected dashboard, a fan turns in the right window while any fan is running,
-and the outline goes dashed when Home Assistant cannot be reached — which is
+and the house goes hollow when Home Assistant cannot be reached — which is
 normal on a laptop that sometimes sits behind a VPN.
 
 ## Install
@@ -81,8 +81,19 @@ Several of these widgets began as SwiftBar plugins. This one could not be:
 ```bash
 swift test              # the whole HomesteadCore suite
 ./scripts/build-app.sh  # build build/Homestead.app
-./art/render-art.sh     # redraw the icon, mascot and glyph strip from code
+./art/render-art.sh     # redraw the glyph strip, and sync the mascot across
+python3 art/gen_app_icon.py   # regenerate the app icon (Gemini) and rebuild the .icns
 ```
+
+The app icon is generated with Gemini (`gemini-2.5-flash-image`) and then cut to
+shape here: the model paints the cottage, `art/gen_app_icon.py` masks it into
+macOS's superellipse tile at Apple's clear-space ratio and builds the `.icns`,
+because that half is geometry rather than taste. The mascot comes from the same
+pipeline the rest of the Menubarn cast uses
+(`widgets.nicksmith.software/art/gen_icons.py homestead`). The menu-bar glyph is
+drawn in code and always will be — it is 22pt, it has to stay sharp on a
+non-Retina bar, and it changes with live state, none of which a generated raster
+can do.
 
 `HomesteadCore` holds everything that can be tested without a screen — the
 WebSocket protocol, the dashboard parser, the state store, unit conversions and
