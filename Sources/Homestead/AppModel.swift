@@ -88,7 +88,7 @@ final class AppModel {
         Task { await old?.disconnect() }
 
         guard let urlText = settings.haURL, let url = HAURL.websocketURL(from: urlText),
-              let token = Keychain.token()
+              let token = TokenStore.token()
         else {
             update { $0.connection = .unconfigured }
             return

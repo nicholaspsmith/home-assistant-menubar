@@ -44,11 +44,11 @@ final class App: NSObject, NSApplicationDelegate {
                                         characterTitle: "House",
                                         onChange: { [weak self] in self?.refreshIcon() })
 
-        // One last prompt, then never again: an item created by an earlier
-        // build trusts only that build's binary.
-        if Keychain.migrateAccessIfNeeded() {
-            log.info("rewrote the keychain item with an access policy that survives rebuilds")
-        }
+        // A keychain item created by an earlier build trusts only that build's
+        // binary, so relax what we can. (Not sufficient on its own for a
+        // rebuilt app — see TokenStore — but it costs nothing.)
+        Keychain.migrateAccessIfNeeded()
+        TokenStore.migrateIfNeeded()
 
         model = AppModel(settings: settings)
         menuController = MenuController(

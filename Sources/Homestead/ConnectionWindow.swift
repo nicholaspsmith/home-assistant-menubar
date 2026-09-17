@@ -35,7 +35,7 @@ final class ConnectionWindowController: NSWindowController, NSWindowDelegate {
 
     func show() {
         urlField.stringValue = settings.haURL ?? ""
-        tokenField.stringValue = Keychain.token() ?? ""
+        tokenField.stringValue = TokenStore.token() ?? ""
         statusLabel.stringValue = ""
         NSApp.activate(ignoringOtherApps: true)
         showWindow(nil)
@@ -129,9 +129,9 @@ final class ConnectionWindowController: NSWindowController, NSWindowDelegate {
         }
         settings.haURL = urlField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            try Keychain.setToken(tokenField.stringValue)
+            try TokenStore.setToken(tokenField.stringValue)
         } catch {
-            return report("Could not save the token to the Keychain.", ok: false)
+            return report("Could not save the token.", ok: false)
         }
         onSaved()
         window?.close()
