@@ -226,7 +226,7 @@ final class AppModel {
         do {
             _ = try await client.send(call.commandPayload)
         } catch {
-            log.error("\(call.domain, privacy: .public).\(call.service, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            log.error("\(call.domain, privacy: .public).\(call.service, privacy: .public) failed: \(String(describing: error), privacy: .public) on \(call.entityId, privacy: .private)")
             // Optimistic UI: put the row back the way HA still has it.
             if let revertEntity { onEntitiesChanged?([revertEntity]) }
         }
@@ -271,7 +271,10 @@ final class AppModel {
         let result = try await client.send(["type": .string("lovelace/dashboards/list")])
         let all = DashboardListing.list(from: result)
         allDashboards = all
-        log.info("dashboards: \(all.map(\.title).joined(separator: ", "), privacy: .public)")
+        // Dashboard titles and entity ids name someone's home. They stay
+        // private in the log (visible with `log --info` on this machine, not
+        // baked into sysdiagnose bundles); only counts are public.
+        log.info("dashboards: \(all.count, privacy: .public) — \(all.map(\.title).joined(separator: ", "), privacy: .private)")
         var listings = settings.visible(from: all)
         guard var chosen = settings.defaultDashboard(from: listings) else { return }
 
@@ -282,14 +285,14 @@ final class AppModel {
                 try await loadDashboard(chosen)
                 break
             } catch {
-                log.info("dropping unreadable dashboard \(chosen.title, privacy: .public)")
+                log.info("dropping unreadable dashboard \(chosen.title, privacy: .private)")
                 listings.removeAll { $0.urlPath == chosen.urlPath }
                 update { $0.dashboards = listings }
                 guard let next = listings.first else { return }
                 chosen = next
             }
         }
-        log.info("selected dashboard: \(chosen.title, privacy: .public)")
+        log.info("selected dashboard: \(chosen.title, privacy: .private)")
         update {
             $0.dashboards = listings
             $0.selected = chosen
@@ -301,7 +304,7 @@ final class AppModel {
         do {
             try await loadDashboard(dashboard)
         } catch {
-            log.error("dashboard \(dashboard.title, privacy: .public) failed to load")
+            log.error("dashboard \(dashboard.title, privacy: .private) failed to load")
         }
     }
 
@@ -356,7 +359,7 @@ final class AppModel {
         let shownIds = Set(shown.map(\.entityId))
         let skipped = refs.map(\.entityId).filter { !shownIds.contains($0) }
         let rowSummary = shown.map { "\($0.entityId)=\($0.kind)" }.joined(separator: ", ")
-        log.info("rows: \(rowSummary, privacy: .public) | skipped: \(skipped.joined(separator: ", "), privacy: .public)")
+        log.info("rows: \(shown.count, privacy: .public) shown, \(skipped.count, privacy: .public) skipped — \(rowSummary, privacy: .private) | \(skipped.joined(separator: ", "), privacy: .private)")
         onSnapshotChange?(snapshot)
     }
 

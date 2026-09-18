@@ -112,6 +112,36 @@ final class DashboardParserTests: XCTestCase {
         XCTAssertEqual(refs.map(\.header), ["Downstairs", "Upstairs"])
     }
 
+    func testDeeplyNestedConfigIsRefusedRatherThanCrashing() {
+        // Lovelace nests cards inside cards without limit. Foundation's decoder
+        // stops first — it refuses JSON past its own nesting limit — so a config
+        // like this never reaches the parser, and the client reports a failed
+        // command instead of dying.
+        var json = #"{"type":"tile","entity":"light.deep"}"#
+        for _ in 0..<600 { json = #"{"type":"vertical-stack","cards":["# + json + #"]}"# }
+        let wrapped = #"{"views":[{"cards":["# + json + #"]}]}"#
+        XCTAssertThrowsError(try JSONValue.parse(Data(wrapped.utf8)))
+    }
+
+    func testTheWalkIsBoundedEvenIfATreeGetsPastTheDecoder() {
+        // Belt and braces: a tree built in memory skips the decoder's limit
+        // entirely, and the walk must still return rather than run out of stack.
+        var node = JSONValue.object(["type": .string("tile"), "entity": .string("light.deep")])
+        for _ in 0..<5_000 {
+            node = .object(["type": .string("vertical-stack"), "cards": .array([node])])
+        }
+        let config = JSONValue.object(["views": .array([.object(["cards": .array([node])])])])
+        XCTAssertTrue(DashboardParser.references(in: config).isEmpty)
+    }
+
+    func testNestingWithinTheLimitStillResolves() throws {
+        var json = #"{"type":"tile","entity":"light.deep"}"#
+        for _ in 0..<20 { json = #"{"type":"vertical-stack","cards":["# + json + #"]}"# }
+        let wrapped = #"{"views":[{"title":"Home","cards":["# + json + #"]}]}"#
+        let refs = DashboardParser.references(in: try JSONValue.parse(Data(wrapped.utf8)))
+        XCTAssertEqual(refs.map { $0.entityId }, ["light.deep"])
+    }
+
     func testEmptyConfigYieldsNothing() throws {
         XCTAssertEqual(try parse(#"{"views":[]}"#), [])
         XCTAssertEqual(try parse(#"{}"#), [])

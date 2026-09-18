@@ -38,6 +38,13 @@ it. First run:
 
 The token is stored in your login Keychain.
 
+**On the address you give it:** `http://` means the WebSocket runs unencrypted,
+and the token is the first frame sent on it — so anyone on the network path can
+read it. That is fine over your own LAN or a Tailscale/WireGuard tunnel, which
+is what most people point this at. Over the open internet, use `https://` (Nabu
+Casa or your own reverse proxy); the app follows the scheme you give it and
+never silently upgrades or downgrades.
+
 ## What appears in the menu
 
 Homestead reads the dashboard's own configuration, so what you get is whatever

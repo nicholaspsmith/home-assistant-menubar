@@ -11,6 +11,10 @@ public enum HAURL {
             return nil
         }
 
+        // A bare host, or an explicit http://, becomes ws:// — unencrypted.
+        // That matters more here than in most clients: the long-lived token is
+        // the first frame sent on the socket, so anyone on the path sees it.
+        // The Connection window says so; this function does not guess for you.
         switch components.scheme {
         case "https", "wss": components.scheme = "wss"
         default: components.scheme = "ws"

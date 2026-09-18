@@ -33,6 +33,12 @@ public enum DashboardParser {
         "icon_tap_action", "entity_id",
     ]
 
+    /// How deep the walk will follow nested cards. Lovelace nests freely and
+    /// nothing stops a config — broken, generated or hostile — from nesting
+    /// thousands deep, which is a stack overflow rather than an error. No real
+    /// dashboard is anywhere near this.
+    private static let maximumDepth = 64
+
     /// Containers recursed in a fixed order, so output order is deterministic
     /// and matches what the dashboard shows.
     private static let containerKeys = ["sections", "cards", "card", "badges", "elements", "features", "chips"]
@@ -46,10 +52,11 @@ public enum DashboardParser {
             found.append(DeviceRef(entityId: entityId, nameOverride: nameOverride, header: header))
         }
 
-        func walk(_ node: JSONValue, header: String) {
+        func walk(_ node: JSONValue, header: String, depth: Int = 0) {
+            guard depth < maximumDepth else { return }
             switch node {
             case .array(let elements):
-                for element in elements { walk(element, header: header) }
+                for element in elements { walk(element, header: header, depth: depth + 1) }
 
             case .object(let fields):
                 let header = fields["title"]?.string.flatMap { $0.isEmpty ? nil : $0 } ?? header
@@ -64,17 +71,17 @@ public enum DashboardParser {
                     } else if let entityId = element["entity"]?.string {
                         append(entityId: entityId, nameOverride: element["name"]?.string, header: header)
                     } else {
-                        walk(element, header: header)   // nested group rows
+                        walk(element, header: header, depth: depth + 1)   // nested group rows
                     }
                 }
 
                 for key in containerKeys {
-                    if let child = fields[key] { walk(child, header: header) }
+                    if let child = fields[key] { walk(child, header: header, depth: depth + 1) }
                 }
                 for key in fields.keys.sorted()
                 where !containerKeys.contains(key) && !skippedKeys.contains(key)
                     && key != "entity" && key != "entities" && key != "name" && key != "title" {
-                    walk(fields[key]!, header: header)
+                    walk(fields[key]!, header: header, depth: depth + 1)
                 }
 
             default:

@@ -63,7 +63,7 @@ enum TokenStore {
         do {
             try writeFile(existing)
             Keychain.deleteToken()
-            log.info("moved the token out of the Keychain into \(fileURL.path, privacy: .public)")
+            log.info("moved the token out of the Keychain into a 0600 file")
             return true
         } catch {
             log.error("could not write the token file: \(String(describing: error), privacy: .public)")
@@ -85,10 +85,15 @@ enum TokenStore {
         let directory = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
-        try Data(token.utf8).write(to: fileURL, options: [.atomic])
-        // An atomic write lands a temporary file and renames it, so the mode has
-        // to be set afterwards or it keeps the default 0644.
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        // Created 0600 in one step rather than written and then chmod-ed: an
+        // atomic write lands a temporary file at the default 0644 and renames
+        // it, which leaves a window — however short — where any other account
+        // on the machine can read the token.
+        try? FileManager.default.removeItem(at: fileURL)
+        guard FileManager.default.createFile(atPath: fileURL.path,
+                                             contents: Data(token.utf8),
+                                             attributes: [.posixPermissions: 0o600])
+        else { throw CocoaError(.fileWriteUnknown) }
     }
 
     private static func removeFile() {

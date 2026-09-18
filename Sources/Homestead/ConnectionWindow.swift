@@ -53,7 +53,9 @@ final class ConnectionWindowController: NSWindowController, NSWindowDelegate {
         statusLabel.lineBreakMode = .byTruncatingTail
 
         let hint = NSTextField(wrappingLabelWithString:
-            "Home Assistant ▸ your profile ▸ Security ▸ Long-lived access tokens ▸ Create token.")
+            "Home Assistant ▸ your profile ▸ Security ▸ Long-lived access tokens ▸ Create token. "
+            + "An http:// address sends the token unencrypted — fine on your own LAN or over "
+            + "Tailscale, not over the open internet. Use https:// there.")
         hint.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         hint.textColor = .secondaryLabelColor
 
@@ -118,6 +120,9 @@ final class ConnectionWindowController: NSWindowController, NSWindowDelegate {
                 report("Token rejected.", ok: false)
             } catch {
                 report("Unreachable: \(error.localizedDescription)", ok: false)
+            }
+            if url.scheme == "ws" {
+                report("Connected — but over an unencrypted connection.", ok: true)
             }
             testButton.isEnabled = true
         }
