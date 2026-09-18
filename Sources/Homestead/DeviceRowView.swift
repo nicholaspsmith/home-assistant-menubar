@@ -100,13 +100,18 @@ final class DeviceRowView: NSView {
             : "Unavailable"
 
         if onPickColor != nil {
+            // A light that is off reports no colour, and an empty ring sitting
+            // in the row reads as a rendering fault rather than a control. The
+            // swatch appears once there is a colour to show.
+            let colour = LightCapabilities.currentColor(state)
+            swatch.isHidden = colour == nil || !available
             swatch.isEnabled = available
             swatch.image = Self.swatchImage(for: state)
         }
     }
 
-    /// A filled circle in the light's current colour — or an outline when it has
-    /// none yet, which is honest about there being nothing to show.
+    /// A filled circle in the light's current colour. Only drawn when there is
+    /// one: see `update(state:)`.
     private static func swatchImage(for state: EntityState?) -> NSImage {
         let rgb = LightCapabilities.currentColor(state)
         let colour = rgb.map {
