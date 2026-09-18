@@ -54,7 +54,7 @@ custom cards all work.
 
 | Entity | Row shows | Controls |
 |---|---|---|
-| `light` | brightness % | switch, brightness slider, warmth slider (tunable white), colour swatch (colour bulbs) |
+| `light` | brightness % | switch, brightness slider, warmth slider in kelvin (tunable white), colour swatch opening the system picker (colour bulbs, once one is on and reporting a colour) |
 | `switch`, `input_boolean`, `remote` | — | switch |
 | `fan` | speed % | switch, speed slider snapped to the fan's own step |
 | `cover` | Open/Closed/Opening, position | open/close, position slider where supported |
@@ -151,6 +151,19 @@ knowing:
 - **Drags are coalesced.** One service call per entity is in flight at a time
   with the newest value queued behind it, so dragging a slider cannot queue
   fifty stale commands at a bulb.
+- **The log does not name your house.** Dashboard titles and entity ids are
+  logged `.private`, so counts show up in `log show` but the names of your rooms
+  and devices do not end up in a sysdiagnose. Counts stay public, which is
+  enough to see what the app is doing.
+- **The token file is created `0600`, not written and then chmod-ed.** An atomic
+  write lands a temporary file at the default `0644` and renames it, which
+  leaves a window where any other account on the machine can read it.
+
+The spec in `docs/superpowers/specs/` is the design this was built from, not a
+description of what it became. Media players, remotes, colour, colour
+temperature, the dashboard chooser and its ordering all arrived afterwards;
+scenes, scripts and an Areas fallback for auto-generated dashboards still have
+not.
 
 ## Licence
 
