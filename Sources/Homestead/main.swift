@@ -103,6 +103,7 @@ final class App: NSObject, NSApplicationDelegate {
         menu.addItem(connection)
 
         menu.addItem(.separator())
+        menu.addItem(AppVersion.menuItem())
         menu.addItem(NSMenuItem(title: "Quit Homestead",
                                 action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
