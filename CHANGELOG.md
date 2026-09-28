@@ -8,6 +8,11 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.0.1] - 2026-09-28
+
+- `install.sh` now asks whether to turn on Start at Login (skipped when it is already on, or when there is no terminal to ask in), then relaunches the app, quitting any running copy first so the new build takes over
+- `Homestead --login on|off|status` turns Start at Login on or off from the shell, or reports it, and exits without opening the app
+
 ## [1.0.0] - 2026-09-23
 
 - feat: the menu shows the version it was built from

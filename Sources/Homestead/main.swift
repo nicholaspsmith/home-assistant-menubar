@@ -146,6 +146,11 @@ final class App: NSObject, NSApplicationDelegate {
     }
 }
 
+// Handle `--login on|off|status` and exit before any UI exists. Start at Login is
+// SMAppService.mainApp, which can only register the calling process's own bundle,
+// so this is the only way an installer or script can turn it on.
+LoginCLI.runIfRequested()
+
 // Top-level code is nonisolated, but this runs on the main thread by
 // definition, which is what lets the whole app be `@MainActor`.
 MainActor.assumeIsolated {

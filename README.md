@@ -24,8 +24,8 @@ normal on a laptop that sometimes sits behind a VPN.
 ./install.sh
 ```
 
-That builds `Homestead.app` and symlinks it into `~/Applications`, then opens
-it. First run:
+That builds `Homestead.app`, symlinks it into `~/Applications`, asks whether to
+turn on Start at Login, then (re)launches it. First run:
 
 1. In Home Assistant: your profile ▸ Security ▸ **Long-lived access tokens** ▸
    Create token. Copy it.
