@@ -8,7 +8,7 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
-## [1.0.2] - 2026-09-30
+## [1.1.0] - 2026-09-30
 
 ### Sign in with your browser
 
