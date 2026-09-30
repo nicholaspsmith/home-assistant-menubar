@@ -8,6 +8,18 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.1.0] - 2026-09-30
+
+### Sign in with your browser
+
+- Connection… now signs in through Home Assistant's own login page: enter the server address (or pick one Homestead found on your network), press Sign In with Browser, and log in there. No long-lived token to create and paste.
+- Homestead keeps the refresh token it is given and gets a new access token whenever it reconnects. Sign Out deletes both and revokes the refresh token on the server.
+- A long-lived token saved by an earlier version keeps working until you sign in again.
+- One menu item to connect: **Connect to Home Assistant…** at the top while signed out (including after a refused refresh token), **Connection…** in the settings section once signed in. Previously both showed while signed out.
+- Closing the Connection window no longer cancels a sign-in in progress, so finishing the login in the browser still connects. While it waits, the button reads **Reopen Login Page** and reopens the same page rather than starting over.
+- A callback from an older login tab gets an "Out of date" page and no longer aborts the sign-in that is waiting.
+- The menu-bar icon no longer goes missing when the Keychain asks for your password at launch (it does after every local build). The read now happens off the main thread, so the icon appears at once and the menu says Connecting… until the prompt is answered.
+
 ## [1.0.1] - 2026-09-28
 
 - `install.sh` now asks whether to turn on Start at Login (skipped when it is already on, or when there is no terminal to ask in), then relaunches the app, quitting any running copy first so the new build takes over

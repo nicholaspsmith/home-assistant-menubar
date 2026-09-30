@@ -7,7 +7,7 @@
 import Foundation
 import Security
 
-/// The long-lived access token, in the login Keychain. Never UserDefaults: a
+/// The Home Assistant credentials (see `HACredentials`), in the login Keychain. Never UserDefaults: a
 /// defaults plist is readable by anything running as this user, and the token
 /// is full API access to the house.
 enum Keychain {

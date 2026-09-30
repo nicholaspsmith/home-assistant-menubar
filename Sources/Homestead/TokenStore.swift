@@ -7,7 +7,8 @@
 import Foundation
 import os
 
-/// Where the Home Assistant token lives.
+/// Where the Home Assistant credentials live: the browser sign-in's access and
+/// refresh tokens as one JSON string, or a bare long-lived token from before it.
 ///
 /// The Keychain is the default and the right answer for anyone running an
 /// installed build. It is a poor answer for whoever is *developing* the app:
@@ -34,6 +35,22 @@ enum TokenStore {
 
     private static let log = Logger(subsystem: "com.nicholaspsmith.Homestead", category: "token")
 
+    /// The one-time migrations, run before the first read.
+    private static let migration: Void = {
+        Keychain.migrateAccessIfNeeded()
+        migrateIfNeeded()
+    }()
+
+    /// `token()` off the main thread. A Keychain read can wait on a password
+    /// prompt for as long as it stays unanswered; on the main thread that
+    /// would keep the menu-bar icon from ever appearing.
+    static func loadInBackground() async -> String? {
+        await Task.detached(priority: .userInitiated) {
+            _ = migration
+            return token()
+        }.value
+    }
+
     static func usesFile(defaults: UserDefaults = .standard) -> Bool {
         defaults.bool(forKey: useFileKey)
     }
@@ -58,6 +75,11 @@ enum TokenStore {
             return
         }
         try writeFile(token)
+        Keychain.deleteToken()
+    }
+
+    static func deleteToken() {
+        removeFile()
         Keychain.deleteToken()
     }
 
