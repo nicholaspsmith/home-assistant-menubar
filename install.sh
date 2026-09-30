@@ -65,14 +65,11 @@ cat <<'EOF'
 Homestead is now running in the menu bar.
 
 First-run setup
-  1. In Home Assistant: your profile ▸ Security ▸ Long-lived access tokens ▸
-     "Create token". Copy it.
-  2. Click the Homestead icon ▸ Connect to Home Assistant…
-  3. Enter the server URL (e.g. http://homeassistant.local:8123), paste the
-     token, press Test, then Save.
-  4. Optional: menu ▸ Start at Login.
+  1. Click the Homestead icon ▸ Connect to Home Assistant…
+  2. Pick your server (or enter its address, e.g. http://homeassistant.local:8123)
+     and press Sign In with Browser. Log in on Home Assistant's page; Homestead
+     connects as soon as the tab says "Signed in".
+  3. Optional: menu ▸ Start at Login.
 
-The token is stored in your login Keychain. (Developers rebuilding the app can
-swap that for a 0600 file to stop the per-rebuild password prompt — see the
-README's Development section.)
+The sign-in's tokens are stored in your login Keychain.
 EOF

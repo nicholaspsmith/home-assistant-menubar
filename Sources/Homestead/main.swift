@@ -50,11 +50,8 @@ final class App: NSObject, NSApplicationDelegate {
                                         characterTitle: "House",
                                         onChange: { [weak self] in self?.refreshIcon() })
 
-        // A keychain item created by an earlier build trusts only that build's
-        // binary, so relax what we can. (Not sufficient on its own for a
-        // rebuilt app — see TokenStore — but it costs nothing.)
-        Keychain.migrateAccessIfNeeded()
-        TokenStore.migrateIfNeeded()
+        // Keychain migrations run with the first token read, off the main
+        // thread (TokenStore.loadInBackground): they can wait on a prompt.
 
         model = AppModel(settings: settings)
         menuController = MenuController(
@@ -98,9 +95,12 @@ final class App: NSObject, NSApplicationDelegate {
         dashboards.isEnabled = !model.allDashboards.isEmpty
         menu.addItem(dashboards)
 
-        let connection = NSMenuItem(title: "Connection…", action: #selector(openConnection), keyEquivalent: "")
-        connection.target = self
-        menu.addItem(connection)
+        // Signed out, the menu leads with Connect to Home Assistant… instead.
+        if MenuController.showsConnectionItem(model.snapshot.connection) {
+            let connection = NSMenuItem(title: "Connection…", action: #selector(openConnection), keyEquivalent: "")
+            connection.target = self
+            menu.addItem(connection)
+        }
 
         menu.addItem(.separator())
         menu.addItem(AppVersion.menuItem())

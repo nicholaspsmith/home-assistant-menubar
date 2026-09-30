@@ -18,5 +18,11 @@
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_home-assistant._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Homestead looks for Home Assistant servers on your network and talks to the one you sign in to.</string>
 </dict>
 </plist>

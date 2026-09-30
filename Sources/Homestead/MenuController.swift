@@ -59,10 +59,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         let snapshot = model.snapshot
 
         if snapshot.connection == .unconfigured {
-            let connect = NSMenuItem(title: "Connect to Home Assistant…",
-                                     action: #selector(openConnection), keyEquivalent: "")
-            connect.target = self
-            menu.addItem(connect)
+            menu.addItem(connectItem())
             menu.addItem(.separator())
             addSettingsItems(menu)
             return
@@ -205,7 +202,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         case .connected, .unconfigured: text = nil
         case .connecting: text = "Connecting…"
         case .unreachable: text = "Can't reach Home Assistant — retrying"
-        case .authFailed: text = "Token rejected — open Connection…"
+        case .authFailed: text = "Signed out"
         }
         guard let text else { return }
 
@@ -213,6 +210,10 @@ final class MenuController: NSObject, NSWindowDelegate {
         item.view = StatusRowView(text: text)
         item.isEnabled = false
         menu.addItem(item)
+
+        if snapshot.connection == .authFailed {
+            menu.addItem(connectItem())
+        }
 
         if case .unreachable = snapshot.connection {
             let retry = NSMenuItem(title: "Retry Now", action: #selector(retry), keyEquivalent: "")
@@ -348,6 +349,21 @@ final class MenuController: NSObject, NSWindowDelegate {
                        red: Int((rgb.redComponent * 255).rounded()),
                        green: Int((rgb.greenComponent * 255).rounded()),
                        blue: Int((rgb.blueComponent * 255).rounded()))
+    }
+
+    /// Whether the settings section offers Connection…: only when signed in,
+    /// because signed out the menu already leads with Connect to Home Assistant….
+    static func showsConnectionItem(_ connection: ConnectionState) -> Bool {
+        connection != .unconfigured && connection != .authFailed
+    }
+
+    /// The one way in while signed out. Signed in, the same window is
+    /// Connection… in the settings section instead (see `showsConnectionItem`).
+    private func connectItem() -> NSMenuItem {
+        let connect = NSMenuItem(title: "Connect to Home Assistant…",
+                                 action: #selector(openConnection), keyEquivalent: "")
+        connect.target = self
+        return connect
     }
 
     @objc private func openConnection() {

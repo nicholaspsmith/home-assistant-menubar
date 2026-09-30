@@ -27,19 +27,33 @@ normal on a laptop that sometimes sits behind a VPN.
 That builds `Homestead.app`, symlinks it into `~/Applications`, asks whether to
 turn on Start at Login, then (re)launches it. First run:
 
-1. In Home Assistant: your profile ▸ Security ▸ **Long-lived access tokens** ▸
-   Create token. Copy it.
-2. Homestead ▸ **Connection…**, enter the server URL
-   (`http://homeassistant.local:8123`), paste the token, press **Test**, then
-   **Save**.
+1. Homestead ▸ **Connect to Home Assistant…** (the menu's one way in while
+   signed out; once signed in it is **Connection…**, near the bottom). A
+   server that announces itself on your network is filled in; otherwise enter
+   its address (`http://homeassistant.local:8123`).
+2. **Sign In with Browser** opens Home Assistant's own login page. Log in there;
+   the tab says "Signed in" and Homestead connects. No token to create or paste.
+   You can close the Connection window meanwhile; the sign-in keeps waiting
+   (for five minutes). Lost the tab? **Reopen Login Page** shows the same one
+   again. A tab left from an earlier attempt is turned away without cancelling
+   the current one.
 3. Optional: **Dashboards…** to choose which of your dashboards the picker
    offers and drag them into the order you want. **Start at Login** is in the
    same menu.
 
-The token is stored in your login Keychain.
+The sign-in hands Homestead an access token (30 minutes) and a refresh token,
+which it uses to get a new access token whenever it reconnects. Both are stored
+in your login Keychain. **Sign Out** in **Connection…** deletes them and revokes
+the refresh token on the server; Home Assistant also lists it under your profile
+▸ Security ▸ Refresh tokens, where you can revoke it too.
+
+The login page comes back to `http://127.0.0.1:47815/auth/callback`, a listener
+Homestead opens only while a sign-in is waiting and only on loopback, so Home
+Assistant's login page names the app "127.0.0.1". A long-lived token saved by an
+older version keeps working until you sign in again.
 
 **On the address you give it:** `http://` means the WebSocket runs unencrypted,
-and the token is the first frame sent on it — so anyone on the network path can
+and the access token is the first frame sent on it — so anyone on the network path can
 read it. That is fine over your own LAN or a Tailscale/WireGuard tunnel, which
 is what most people point this at. Over the open internet, use `https://` (Nabu
 Casa or your own reverse proxy); the app follows the scheme you give it and
@@ -131,7 +145,7 @@ It is then kept at `~/Library/Application Support/Homestead/ha-token`, mode
 and is not encrypted at rest — so it is off by default and deliberately absent
 from the UI. An installed build is never rebuilt and never sees the prompt.
 
-Set it back to `false` and re-save the token in **Connection…** to return to the
+Set it back to `false` and sign in again in **Connection…** to return to the
 Keychain.
 
 ## Design notes

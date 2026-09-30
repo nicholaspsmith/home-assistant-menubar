@@ -54,6 +54,7 @@ final class AppModel {
     private var subscriptionId: Int?
     private var reconnectAttempt = 0
     private var reconnectTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
     /// Every dashboard Home Assistant reports, before the visibility filter —
     /// the Dashboards window needs the full list to tick from.
@@ -86,6 +87,8 @@ final class AppModel {
     func reloadConfiguration() {
         reconnectTask?.cancel()
         reconnectTask = nil
+        refreshTask?.cancel()
+        refreshTask = nil
         reconnectAttempt = 0
         let old = client
         client = nil
@@ -94,12 +97,52 @@ final class AppModel {
         Task { await old?.disconnect() }
 
         guard let urlText = settings.haURL, let url = HAURL.websocketURL(from: urlText),
-              let token = TokenStore.token()
+              let base = HAAuth.baseURL(from: urlText)
         else {
             update { $0.connection = .unconfigured }
             return
         }
-        connect(url: url, token: token)
+
+        // Reading the Keychain can block on a password prompt (every local
+        // build is a new binary to it), so it happens off the main thread:
+        // the icon and menu stay up, showing Connecting…, until it is answered.
+        update { $0.connection = .connecting }
+        refreshTask = Task {
+            guard let stored = await TokenStore.loadInBackground() else {
+                guard !Task.isCancelled else { return }
+                refreshTask = nil
+                update { $0.connection = .unconfigured }
+                return
+            }
+            guard !Task.isCancelled else { return }
+            let credentials = HACredentials.decode(stored: stored)
+            guard credentials.needsRefresh(now: Date()), let refreshToken = credentials.refreshToken else {
+                refreshTask = nil
+                connect(url: url, token: credentials.accessToken)
+                return
+            }
+
+            // The access token lasts 30 minutes; every (re)connect past that
+            // trades the refresh token for a new one first.
+            do {
+                let data = try await HAAuth.send(HAAuth.refreshRequest(base: base, refreshToken: refreshToken))
+                let fresh = try HAAuth.credentials(fromTokenResponse: data, now: Date(),
+                                                   keepingRefreshToken: refreshToken)
+                let encoded = fresh.encoded()
+                await Task.detached { try? TokenStore.setToken(encoded) }.value
+                // A newer reload (Sign Out, a new sign-in) owns the connection now.
+                guard !Task.isCancelled else { return }
+                refreshTask = nil
+                connect(url: url, token: fresh.accessToken)
+            } catch is CancellationError {
+                return
+            } catch HAAuthError.rejected {
+                log.error("refresh token rejected — sign in again")
+                update { $0.connection = .authFailed }
+            } catch {
+                handleDrop(reason: error.localizedDescription)
+            }
+        }
     }
 
     func retryNow() {
