@@ -2,7 +2,7 @@
 
 <p align="center"><img src="docs/mascot.png" width="160" alt="Homestead's mascot, a house with lit windows for eyes"></p>
 
-<p align="center">Part of the <a href="https://widgets.nicksmith.software">Menubarn</a> widget library.</p>
+<p align="center">Part of <strong><a href="https://menumon.nicksmith.software">Menumon</a></strong>.</p>
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices — switches you can flip, sliders for
@@ -110,7 +110,7 @@ The app icon is generated with Gemini (`gemini-2.5-flash-image`) and then cut to
 shape here: the model paints the cottage, `art/gen_app_icon.py` masks it into
 macOS's superellipse tile at Apple's clear-space ratio and builds the `.icns`,
 because that half is geometry rather than taste. The mascot comes from the same
-pipeline the rest of the Menubarn cast uses
+pipeline the rest of the Menumon cast uses
 (`widgets.nicksmith.software/art/gen_icons.py homestead`). The menu-bar glyph is
 drawn in code and always will be: it changes with live state, which a generated
 raster cannot. It is drawn for a Retina bar — half-point sills, mullions and
