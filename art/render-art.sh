@@ -25,5 +25,5 @@ cp art/render-art.swift "$work/main.swift"
 mascot="../widgets.nicksmith.software/site/img/mascots/homestead.png"
 if [ -f "$mascot" ]; then
     cp "$mascot" docs/mascot.png
-    echo "copied docs/mascot.png from the Menubarn mascot pipeline"
+    echo "copied docs/mascot.png from the Menumon mascot pipeline"
 fi

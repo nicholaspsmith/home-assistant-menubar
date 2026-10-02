@@ -8,7 +8,7 @@
 // CharacterIcon, so the README always shows what the app actually draws.
 //
 // The app icon and the mascot are not drawn here: they are generated art, from
-// art/gen_app_icon.py and the Menubarn site's mascot pipeline respectively.
+// art/gen_app_icon.py and the Menumon site's mascot pipeline respectively.
 //
 // Run from the repo root: art/render-art.sh
 import AppKit
