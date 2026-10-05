@@ -4,25 +4,38 @@
 
 <p align="center">Part of <strong><a href="https://menumon.nicksmith.software">Menumon</a></strong>.</p>
 
+**Version 1.3.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
-menu is that dashboard's devices — switches you can flip, sliders for
-brightness, warmth, fan speed, blind position and target temperature, a colour
-picker for bulbs that have one, and transport controls for media players.
-Nothing closes the menu, so you can turn three things on without opening it
-three times.
+menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
+speed, blind position and target temperature, a colour picker for colour bulbs,
+and transport controls for media players. Using a control does not close the
+menu.
 
 <p align="center"><img src="docs/menubar-icon.png" width="440" alt="The menu-bar glyph: a cottage with dark windows, one window lit, both lit, a fan turning in one, and hollow when unreachable"></p>
 
-The glyph carries the state: windows light with the number of lights on in the
-selected dashboard, a fan turns in the right window while any fan is running,
-and the house goes hollow when Home Assistant cannot be reached — which is
-normal on a laptop that sometimes sits behind a VPN.
+## The menu-bar icon
 
-The weather is outside it: sun or moon behind the roof, clouds over it, rain,
-snow, sleet or lightning beside the walls, fog and wind — from a Home Assistant
-`weather` entity, with `sun.sun` saying when it is night. Hover the icon for
-the conditions and temperature. **Weather ▸** picks the entity (Automatic
-prefers the Forecast Home one Home Assistant sets up) or turns it off.
+The icon is a cottage:
+
+- **Windows light** with the number of lights on in the selected dashboard.
+- **A fan turns** in the right window while any fan is running.
+- **The house is hollow** when Home Assistant cannot be reached (expected while
+  a VPN blocks the route to it).
+- **Weather** from a Home Assistant `weather` entity is drawn around the house:
+  sun or moon behind the roof (`sun.sun` decides night), clouds over it, rain,
+  snow, sleet or lightning beside the walls, fog and wind. Hover the icon for
+  the conditions and temperature.
+
+**Icon ▸ Dot** replaces the cottage with a plain dot; **Icon ▸ House** restores it.
+
+## Requirements
+
+- macOS 13+
+- Xcode Command Line Tools (Swift 5.9+)
+- [StatusItemKit](https://github.com/nicholaspsmith/StatusItemKit) cloned
+  beside this repo (`../StatusItemKit`; `Package.swift` uses it by path)
+- A Home Assistant server reachable over HTTP(S)
 
 ## Install
 
@@ -30,175 +43,146 @@ prefers the Forecast Home one Home Assistant sets up) or turns it off.
 ./install.sh
 ```
 
-That builds `Homestead.app`, symlinks it into `~/Applications`, asks whether to
-turn on Start at Login, then (re)launches it. First run:
+This builds `Homestead.app`, symlinks it into `~/Applications`, asks whether to
+turn on Start at Login, arms the release `pre-push` hook, then (re)launches the
+app.
 
-1. Homestead ▸ **Connect to Home Assistant…** (the menu's one way in while
-   signed out; once signed in it is **Connection…**, near the bottom). A
-   server that announces itself on your network is filled in; otherwise enter
-   its address (`http://homeassistant.local:8123`).
-2. **Sign In with Browser** opens Home Assistant's own login page. Log in there;
-   the tab says "Signed in" and Homestead connects. No token to create or paste.
-   You can close the Connection window meanwhile; the sign-in keeps waiting
-   (for five minutes). Lost the tab? **Reopen Login Page** shows the same one
-   again. A tab left from an earlier attempt is turned away without cancelling
-   the current one.
-3. Optional: **Dashboards…** to choose which of your dashboards the picker
-   offers and drag them into the order you want. **Start at Login** is in the
-   same menu.
+## First run
 
-The sign-in hands Homestead an access token (30 minutes) and a refresh token,
-which it uses to get a new access token whenever it reconnects. Both are stored
-in your login Keychain. **Sign Out** in **Connection…** deletes them and revokes
-the refresh token on the server; Home Assistant also lists it under your profile
-▸ Security ▸ Refresh tokens, where you can revoke it too.
+1. Choose **Connect to Home Assistant…** (the only way in while signed out;
+   once signed in it is **Connection…**, near the bottom of the menu). A server
+   that announces itself over Bonjour (`_home-assistant._tcp`) is filled in;
+   otherwise enter its address, e.g. `http://homeassistant.local:8123`.
+2. **Sign In with Browser** opens Home Assistant's login page. Log in; the tab
+   says "Signed in" and Homestead connects. The sign-in waits five minutes, even
+   if you close the Connection window. **Reopen Login Page** shows the same page
+   again; a tab from an earlier attempt is rejected without cancelling the
+   current one.
+3. Optional: **Dashboards…** chooses which dashboards the picker offers and in
+   what order (drag to reorder).
 
-The login page comes back to `http://127.0.0.1:47815/auth/callback`, a listener
-Homestead opens only while a sign-in is waiting and only on loopback, so Home
-Assistant's login page names the app "127.0.0.1". A long-lived token saved by an
-older version keeps working until you sign in again.
+### Sign-in and tokens
 
-**On the address you give it:** `http://` means the WebSocket runs unencrypted,
-and the access token is the first frame sent on it — so anyone on the network path can
-read it. That is fine over your own LAN or a Tailscale/WireGuard tunnel, which
-is what most people point this at. Over the open internet, use `https://` (Nabu
-Casa or your own reverse proxy); the app follows the scheme you give it and
-never silently upgrades or downgrades.
+Sign-in returns a 30-minute access token and a refresh token; Homestead uses
+the refresh token to get a new access token on each reconnect. Both are stored
+in the login Keychain. **Sign Out** (in **Connection…**) deletes them and
+revokes the refresh token on the server; you can also revoke it in Home
+Assistant under your profile ▸ Security ▸ Refresh tokens. A long-lived token
+stored by an older version keeps working until you sign in again.
 
-## What appears in the menu
+The login page redirects to `http://127.0.0.1:47815/auth/callback`, a
+loopback-only listener that is open only while a sign-in is waiting, so Home
+Assistant's login page names the app "127.0.0.1".
 
-Homestead reads the dashboard's own configuration, so what you get is whatever
-that dashboard shows — it does not invent a layout of its own. Cards are walked
-structurally rather than by type, so stacks, grids, sections, conditionals and
-custom cards all work. Heading cards title the rows that follow them, as they
-do on the dashboard.
+**Use `https://` across untrusted networks.** With `http://` the WebSocket is
+unencrypted and the access token is its first frame. That is fine on your LAN
+or over a Tailscale/WireGuard tunnel; over the internet use `https://` (Nabu
+Casa or a reverse proxy). Homestead uses the scheme you give it and never
+upgrades or downgrades it.
+
+## The menu
+
+Homestead renders the selected dashboard's own configuration rather than a
+layout of its own. Cards are walked structurally, not by type, so stacks,
+grids, sections, conditionals and custom cards all work. Heading cards title
+the rows that follow them.
 
 A card whose tap calls a service (`tap_action: perform-action`, or the older
-`call-service`) is a **button**, not the entity it names: a remote dashboard
-built from fifteen tiles on one `remote` entity, each sending a different
-command, is fifteen buttons. Buttons from the same grid card stay together in
-its columns, so a D-pad is still a D-pad; arrows, transport, volume and power
-show as their glyph, anything else by name. A card that asks for
-`confirmation` asks inline — the first press shows **Confirm?**, the second
-acts. A tap that only toggles the card's own entity is just that entity's row.
+`call-service`) becomes a **button**, not a row for the entity it names: fifteen
+tiles on one `remote` entity, each sending a different command, are fifteen
+buttons. Buttons from the same grid card keep its columns, so a D-pad stays a
+D-pad. Arrows, transport, volume and power show as glyphs, anything else by
+name. A card with `confirmation` asks inline: the first press shows
+**Confirm?**, the second acts. A tap that only toggles the card's own entity is
+that entity's normal row.
 
 | Entity | Row shows | Controls |
 |---|---|---|
-| `light` | brightness % | switch, brightness slider, warmth slider in kelvin (tunable white), colour swatch opening the system picker (colour bulbs, once one is on and reporting a colour) |
+| `light` | brightness % | switch, brightness slider, warmth slider in kelvin (tunable white), colour swatch opening the system picker (colour bulbs, once on and reporting a colour) |
 | `switch`, `input_boolean`, `remote`, `automation`, `group` | — | switch |
 | `button`, `input_button`, `script`, `scene` | — | Press / Run / Activate |
 | `fan` | speed % | switch, speed slider snapped to the fan's own step |
 | `cover` | Open/Closed/Opening, position | open / stop / close, position slider where supported (shown even while closed) |
-| `climate`, `water_heater` | reading · what it is doing (Heating, Cooling, Idle) | mode picker from the entity's `hvac_modes` (in place of the switch), and the target — or both ends of a heat/cool band — as buttons: click one, then ▲▼ move it a step |
-| `media_player` | what's playing, or the source | power, volume slider or volume ▼ mute ▲, ⏮ ⏯ ⏭ — each only if the player reports it |
-| `sensor`, `binary_sensor` | value worded as HA does (OK/Problem, 6 h ago, 14 d) | read-only, and hidden unless **Show Sensors** is ticked |
+| `climate`, `water_heater` | reading · current action (Heating, Cooling, Idle) | mode picker from the entity's `hvac_modes` (in place of the switch); the target, or both ends of a heat/cool range, as buttons: click one, then ▲▼ step it |
+| `media_player` | what's playing, or the source | power, volume slider or volume ▼ mute ▲, ⏮ ⏯ ⏭ — each only if the player supports it |
+| `sensor`, `binary_sensor` | value worded as HA does (OK/Problem, 6 h ago, 14 d) | read-only; hidden unless **Show Sensors** is ticked |
 
-Anything else — to-do lists, cameras, weather — is skipped rather than shown as
-a row that cannot do anything.
+Anything else (to-do lists, cameras, weather cards) is skipped.
 
-## Why not a SwiftBar plugin?
+### Settings items
 
-Several of these widgets began as SwiftBar plugins. This one could not be:
-
-- **State arrives, it is not polled.** Homestead holds one WebSocket to Home
-  Assistant and subscribes to exactly the entities on the selected dashboard.
-  Change a light from your phone and the row moves while the menu is open. A
-  plugin is a script re-run on a timer; it would have to poll the REST API and
-  would still be wrong between ticks.
-- **Real controls.** Switches, sliders and transport buttons live in the menu as
-  views, so using one does not dismiss the menu. A plugin's dropdown is whatever
-  its text protocol can express.
-- **The token is not in a shell script.** It lives in the Keychain, written by
-  the app.
-- **Testable.** The protocol, the dashboard parser, the state diffing and every
-  service call are a library with unit tests, not a script whose only test is
-  opening the menu.
+| Item | Does |
+|---|---|
+| **Show Sensors** | Shows `sensor` and `binary_sensor` rows |
+| **Start at Login** | Registers the app with `SMAppService` |
+| **Icon ▸** | House or Dot |
+| **Weather ▸** | Weather entity for the icon: Automatic (prefers `weather.forecast_home`), a specific entity, or None. Absent when HA has no weather entity |
+| **Dashboards…** | Which dashboards the picker offers, and their order |
+| **Connection…** | Server address, sign in / sign out (shown when signed in) |
 
 ## Development
 
 ```bash
-swift test              # the whole HomesteadCore suite
-./scripts/build-app.sh  # build build/Homestead.app
-./art/render-art.sh     # redraw the glyph strip, and sync the mascot across
+swift test                    # the HomesteadCore test suite
+./scripts/build-app.sh        # build build/Homestead.app
+./art/render-art.sh           # redraw docs/menubar-icon.png; copy the mascot from the site repo
 python3 art/gen_app_icon.py   # regenerate the app icon (Gemini) and rebuild the .icns
 ```
 
-The app icon is generated with Gemini (`gemini-2.5-flash-image`) and then cut to
-shape here: the model paints the cottage, `art/gen_app_icon.py` masks it into
-macOS's superellipse tile at Apple's clear-space ratio and builds the `.icns`,
-because that half is geometry rather than taste. The mascot comes from the same
-pipeline the rest of the Menumon cast uses
-(`widgets.nicksmith.software/art/gen_icons.py homestead`). The menu-bar glyph is
-drawn in code and always will be: it changes with live state, which a generated
-raster cannot. It is drawn for a Retina bar — half-point sills, mullions and
-shingle courses land on half pixels at 2x — and anyone on a non-Retina display
-can pick the plain Dot in **Icon ▸**.
+- `HomesteadCore` holds everything testable without a screen: the WebSocket
+  protocol, auth, the dashboard parser, the state store, unit conversions and
+  service calls.
+- `Homestead` is the AppKit app, built on
+  [StatusItemKit](https://github.com/nicholaspsmith/StatusItemKit).
+- The menu-bar glyph is drawn in code (`CharacterIcon` in StatusItemKit, used
+  by `HouseIcon.swift`) because it changes with live state.
+  `art/render-art.sh` renders the README strip from that same code.
+- The app icon comes from `art/gen_app_icon.py`: Gemini
+  (`gemini-2.5-flash-image`) paints it, and the script masks it to the macOS
+  tile shape and builds `Resources/bundle/AppIcon.icns`. The mascot comes from
+  the Menumon site's pipeline
+  (`widgets.nicksmith.software/art/gen_icons.py homestead`).
+- Logs use subsystem `com.nicholaspsmith.Homestead`. Dashboard titles and
+  entity ids are logged `.private`; counts are public.
 
-`HomesteadCore` holds everything that can be tested without a screen — the
-WebSocket protocol, the dashboard parser, the state store, unit conversions and
-service calls. The `Homestead` target is AppKit only, built on the shared
-[StatusItemKit](https://github.com/nicholaspsmith/StatusItemKit).
+### The Keychain prompt, and the file token store
 
-### The Keychain prompt, and the escape hatch
+macOS pins a Keychain item to the code signature of the binaries that touched
+it. With a self-signed certificate that is the binary's cdhash, which changes
+on every build, so each rebuild asks for your login password before the app
+can read its token ("Always Allow" covers only that build). A self-signed app
+has no way around this.
 
-macOS pins a Keychain item to the code signature of the binaries that have
-touched it. With a self-signed certificate that pin is the binary's cdhash,
-which changes on every build — so while developing, each rebuild asks for your
-login password before the app can read its own token, and "Always Allow" only
-whitelists the build that just asked. (There is no way around it on a
-self-signed app: the data-protection Keychain, which has no ACLs at all,
-requires an entitlement self-signed code cannot carry, and a stable partition
-needs a real Developer ID team.)
-
-If you are rebuilding constantly, move the token to a file instead:
+If you rebuild often, store the token in a file instead:
 
 ```bash
 defaults write com.nicholaspsmith.Homestead UseFileTokenStore -bool true
 ```
 
-It is then kept at `~/Library/Application Support/Homestead/ha-token`, mode
-`0600`, and migrated out of the Keychain on the next launch. **This is weaker**
-— a file is readable by anything running as you, goes into backups as plaintext,
-and is not encrypted at rest — so it is off by default and deliberately absent
-from the UI. An installed build is never rebuilt and never sees the prompt.
+The token then lives at `~/Library/Application Support/Homestead/ha-token`
+(mode `0600`) and is moved out of the Keychain on the next launch. **This is
+weaker**: the file is readable by anything running as you and is backed up as
+plaintext, so the setting is off by default and not in the UI. To return to the
+Keychain, set it to `false` and sign in again in **Connection…**.
 
-Set it back to `false` and sign in again in **Connection…** to return to the
-Keychain.
-
-## Design notes
-
-`docs/superpowers/specs/` holds the design this was built from and
-`docs/superpowers/plans/` the implementation plan. A few decisions worth
-knowing:
+### Implementation notes
 
 - **The dashboard picker expands inside the menu.** An `NSPopUpButton` cannot be
-  clicked at all while a menu is tracking — the menu owns the mouse — and a
-  submenu would dismiss the whole menu on selection. View-based rows do neither.
-- **Sliders appear only while a device is on**, except a shade's: setting a
+  clicked while a menu is tracking, and a submenu would dismiss the menu on
+  selection. View-based rows do neither.
+- **Sliders show only while a device is on**, except a cover's: setting a
   closed shade to half-way is how you open it half-way.
-- **A thermostat's target is stepped, not slid.** A slider across a 40-degree
-  band could not land on a particular degree. Arrow presses collect for a moment
-  and go as one call, and the row shows what was sent until the thermostat
-  confirms it. Keyboard arrows cannot be used: a menu that is tracking keeps
+- **Thermostat targets are stepped with buttons.** Presses collect briefly and
+  go as one service call, and the row shows the sent value until the
+  thermostat confirms it. Keyboard arrows cannot be used: a tracking menu keeps
   key events to itself.
-- **Colour and warmth are separate controls.** Neither can express the other: a
-  colour wheel cannot pick a precise white, and `color_temp` is not a colour.
-- **Drags are coalesced.** One service call per entity is in flight at a time
-  with the newest value queued behind it, so dragging a slider cannot queue
-  fifty stale commands at a bulb.
-- **The log does not name your house.** Dashboard titles and entity ids are
-  logged `.private`, so counts show up in `log show` but the names of your rooms
-  and devices do not end up in a sysdiagnose. Counts stay public, which is
-  enough to see what the app is doing.
-- **The token file is created `0600`, not written and then chmod-ed.** An atomic
-  write lands a temporary file at the default `0644` and renames it, which
-  leaves a window where any other account on the machine can read it.
+- **Drags are coalesced.** One service call per entity is in flight at a time,
+  with only the newest value queued behind it.
+- **The token file is created `0600` in one step**, not written and then
+  chmod-ed, so it is never briefly readable by other accounts.
 
-The spec in `docs/superpowers/specs/` is the design this was built from, not a
-description of what it became. Media players, remotes, colour, colour
-temperature, the dashboard chooser and its ordering, buttons, scenes and
-scripts all arrived afterwards; an Areas fallback for auto-generated dashboards
-still has not.
+The original design and plan are in `docs/superpowers/specs/` and
+`docs/superpowers/plans/`; the shipped app has outgrown them.
 
 ## Releasing
 
@@ -208,15 +192,17 @@ Every push to `main` is a release. Before pushing, add a dated
 it). When it reaches `main`, GitHub tags `vX.Y.Z` and publishes the section as
 a release titled `vX.Y.Z`. Without a new version:
 
-- a push is refused locally by the `pre-push` hook;
+- the `pre-push` hook refuses the push;
 - a pull request **cannot merge** — `release / check` is required on `main`;
 - a push that reaches `main` anyway fails the release workflow.
 
 The one exception is `[no release]` in the tip commit's message, for changes
 nothing a user runs (setup, CI, developer docs): it passes every check with no
 version bump and no tag. Never tag or create a release by hand, and never
-`gh pr merge --admin` past a failing check — fix the PR. After merging, `git pull` for the tag and rebuild. `install.sh` re-arms the hook on a fresh clone.
-See [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one) for the whole rule.
+`gh pr merge --admin` past a failing check — fix the PR. After merging,
+`git pull` for the tag and rebuild. `install.sh` re-arms the hook on a fresh
+clone. See [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one)
+for the full rule.
 
 ## License
 
@@ -225,3 +211,18 @@ Copyright (c) 2026 Nicholas Smith. Licensed under the
 redistribute this software, including inside proprietary products, provided
 the copyright notice and license stay on these files and any modified
 versions of them are made available under the same license.
+
+## Why not a SwiftBar plugin?
+
+A plugin could not do what this app does:
+
+- **State is pushed, not polled.** Homestead holds one WebSocket to Home
+  Assistant and subscribes to exactly the entities on the selected dashboard,
+  so a change made elsewhere moves the row while the menu is open. A plugin is
+  a script re-run on a timer, polling the REST API and stale between runs.
+- **Real controls.** Switches, sliders and transport buttons are views in the
+  menu, so using one does not dismiss it. A plugin's dropdown is limited to
+  what its text protocol can express.
+- **The token is not in a shell script.** The app keeps it in the Keychain.
+- **Testable.** The protocol, dashboard parser, state diffing and service
+  calls are a library with unit tests.
