@@ -18,6 +18,7 @@ final class DeviceCatalogTests: XCTestCase {
         DeviceRef(entityId: "sensor.temperature", nameOverride: nil, header: "Office"),
         DeviceRef(entityId: "media_player.tv", nameOverride: nil, header: "Office"),
         DeviceRef(entityId: "automation.sunset", nameOverride: nil, header: "Office"),
+        DeviceRef(entityId: "todo.household", nameOverride: nil, header: "Office"),
     ]
 
     private let states: [String: EntityState] = [
@@ -30,6 +31,7 @@ final class DeviceCatalogTests: XCTestCase {
         "sensor.temperature": EntityState(state: "21.5", attributes: ["unit_of_measurement": .string("°C")]),
         "media_player.tv": EntityState(state: "playing"),
         "automation.sunset": EntityState(state: "on"),
+        "todo.household": EntityState(state: "17"),
     ]
 
     func testGroupsPreserveDashboardOrderAndHeaders() {
@@ -38,7 +40,8 @@ final class DeviceCatalogTests: XCTestCase {
         XCTAssertEqual(groups.map(\.title), ["Living Room", "Office"])
         XCTAssertEqual(groups[0].devices.map(\.entityId), ["light.ceiling", "fan.ceiling"])
         XCTAssertEqual(groups[1].devices.map(\.entityId),
-                       ["switch.heater", "input_boolean.guest", "cover.garage", "cover.blind", "media_player.tv"])
+                       ["switch.heater", "input_boolean.guest", "cover.garage", "cover.blind", "media_player.tv",
+                        "automation.sunset"])
     }
 
     func testKindsComeFromTheDomain() {
@@ -54,10 +57,26 @@ final class DeviceCatalogTests: XCTestCase {
     }
 
     func testDomainsWithNothingToControlAreDropped() {
-        // An automation is a rule, not a device; its "on" says it is enabled.
+        // A to-do list has nothing a menu row could switch or set.
         let ids = DeviceCatalog.build(refs: refs, states: states, showSensors: true).flatMap(\.devices).map(\.entityId)
-        XCTAssertFalse(ids.contains("automation.sunset"))
+        XCTAssertFalse(ids.contains("todo.household"))
         XCTAssertTrue(ids.contains("media_player.tv"))
+    }
+
+    func testAutomationsAndGroupsSwitchAndButtonsPress() {
+        let refs = ["automation.sunset", "group.living_room", "button.restart", "input_button.doorbell",
+                    "script.movie_night", "scene.evening"]
+            .map { DeviceRef(entityId: $0, nameOverride: nil, header: "Home") }
+        let devices = DeviceCatalog.build(refs: refs, states: [:], showSensors: false).flatMap(\.devices)
+        XCTAssertEqual(devices.map(\.kind), [.toggle, .toggle, .button, .button, .button, .button])
+
+        // A group has no turn_on of its own.
+        XCTAssertEqual(ServiceCall.toggle(devices[1], on: true),
+                       ServiceCall(domain: "homeassistant", service: "turn_on", entityId: "group.living_room", serviceData: [:]))
+        XCTAssertEqual(ServiceCall.press(devices[2]),
+                       ServiceCall(domain: "button", service: "press", entityId: "button.restart", serviceData: [:]))
+        XCTAssertEqual(ServiceCall.press(devices[4]),
+                       ServiceCall(domain: "script", service: "turn_on", entityId: "script.movie_night", serviceData: [:]))
     }
 
     func testSensorsAppearOnlyWhenEnabled() {

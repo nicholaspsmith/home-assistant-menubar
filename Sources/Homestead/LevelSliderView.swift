@@ -19,7 +19,6 @@ enum SliderStyle: Equatable {
         case .warmth: return ("sun.horizon", "sun.max")
         case .level(.fan): return ("wind", "fanblades")
         case .level(.cover): return ("blinds.horizontal.closed", "blinds.horizontal.open")
-        case .level(.thermostat): return ("thermometer.low", "thermometer.high")
         case .level(.mediaPlayer): return ("speaker.fill", "speaker.wave.3.fill")
         case .level: return ("light.min", "light.max")
         }
@@ -35,8 +34,7 @@ final class LevelSliderView: NSView {
     private let onChange: (Double) -> Void
 
     /// - Parameter caption: shown at the trailing end, for a slider whose value
-    ///   is not already on the row above it — a thermostat's target, where the
-    ///   row shows the current reading instead.
+    ///   is not already on the row above it — a bulb's warmth in kelvin.
     init(style: SliderStyle, fraction: Double, caption: String? = nil, onChange: @escaping (Double) -> Void) {
         self.onChange = onChange
         super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 24))

@@ -64,19 +64,30 @@ never silently upgrades or downgrades.
 Homestead reads the dashboard's own configuration, so what you get is whatever
 that dashboard shows — it does not invent a layout of its own. Cards are walked
 structurally rather than by type, so stacks, grids, sections, conditionals and
-custom cards all work.
+custom cards all work. Heading cards title the rows that follow them, as they
+do on the dashboard.
+
+A card whose tap calls a service (`tap_action: perform-action`, or the older
+`call-service`) is a **button**, not the entity it names: a remote dashboard
+built from fifteen tiles on one `remote` entity, each sending a different
+command, is fifteen buttons. Buttons from the same grid card stay together in
+its columns, so a D-pad is still a D-pad; arrows, transport, volume and power
+show as their glyph, anything else by name. A card that asks for
+`confirmation` asks inline — the first press shows **Confirm?**, the second
+acts. A tap that only toggles the card's own entity is just that entity's row.
 
 | Entity | Row shows | Controls |
 |---|---|---|
 | `light` | brightness % | switch, brightness slider, warmth slider in kelvin (tunable white), colour swatch opening the system picker (colour bulbs, once one is on and reporting a colour) |
-| `switch`, `input_boolean`, `remote` | — | switch |
+| `switch`, `input_boolean`, `remote`, `automation`, `group` | — | switch |
+| `button`, `input_button`, `script`, `scene` | — | Press / Run / Activate |
 | `fan` | speed % | switch, speed slider snapped to the fan's own step |
-| `cover` | Open/Closed/Opening, position | open/close, position slider where supported |
-| `climate`, `water_heater` | reading → target | switch, temperature slider over the entity's own band |
-| `media_player` | what's playing, or the source | power, volume, ⏮ ⏯ ⏭ — each only if the player reports it |
-| `sensor`, `binary_sensor` | value and unit | read-only, and hidden unless **Show Sensors** is ticked |
+| `cover` | Open/Closed/Opening, position | open / stop / close, position slider where supported (shown even while closed) |
+| `climate`, `water_heater` | reading · what it is doing (Heating, Cooling, Idle) | mode picker from the entity's `hvac_modes` (in place of the switch), and the target — or both ends of a heat/cool band — as buttons: click one, then ▲▼ move it a step |
+| `media_player` | what's playing, or the source | power, volume slider or volume ▼ mute ▲, ⏮ ⏯ ⏭ — each only if the player reports it |
+| `sensor`, `binary_sensor` | value worded as HA does (OK/Problem, 6 h ago, 14 d) | read-only, and hidden unless **Show Sensors** is ticked |
 
-Anything else — automations, scenes, scripts — is skipped rather than shown as
+Anything else — to-do lists, cameras, weather — is skipped rather than shown as
 a row that cannot do anything.
 
 ## Why not a SwiftBar plugin?
@@ -157,9 +168,13 @@ knowing:
 - **The dashboard picker expands inside the menu.** An `NSPopUpButton` cannot be
   clicked at all while a menu is tracking — the menu owns the mouse — and a
   submenu would dismiss the whole menu on selection. View-based rows do neither.
-- **Sliders appear only while a device is on**, except a thermostat's: a set
-  point matters whether or not it is currently heating, and is usually what you
-  want to change before turning it on.
+- **Sliders appear only while a device is on**, except a shade's: setting a
+  closed shade to half-way is how you open it half-way.
+- **A thermostat's target is stepped, not slid.** A slider across a 40-degree
+  band could not land on a particular degree. Arrow presses collect for a moment
+  and go as one call, and the row shows what was sent until the thermostat
+  confirms it. Keyboard arrows cannot be used: a menu that is tracking keeps
+  key events to itself.
 - **Colour and warmth are separate controls.** Neither can express the other: a
   colour wheel cannot pick a precise white, and `color_temp` is not a colour.
 - **Drags are coalesced.** One service call per entity is in flight at a time
@@ -175,9 +190,9 @@ knowing:
 
 The spec in `docs/superpowers/specs/` is the design this was built from, not a
 description of what it became. Media players, remotes, colour, colour
-temperature, the dashboard chooser and its ordering all arrived afterwards;
-scenes, scripts and an Areas fallback for auto-generated dashboards still have
-not.
+temperature, the dashboard chooser and its ordering, buttons, scenes and
+scripts all arrived afterwards; an Areas fallback for auto-generated dashboards
+still has not.
 
 ## Releasing
 

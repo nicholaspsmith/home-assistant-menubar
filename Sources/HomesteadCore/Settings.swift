@@ -84,7 +84,7 @@ public final class Settings {
         let ordered = ordered(listings)
         guard !chosen.isEmpty else { return ordered }
         let filtered = ordered.filter { chosen.contains($0.urlPath ?? "") }
-        return filtered.isEmpty ? ordered : filtered
+        return filtered.isEmpty ? ordered : DashboardListing.disambiguated(filtered)
     }
 
     /// Which dashboard to open with: the remembered one if it still exists,

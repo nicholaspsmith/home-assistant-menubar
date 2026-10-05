@@ -7,8 +7,10 @@
 import AppKit
 import HomesteadCore
 
-/// One device: name, its current value, and a switch. Lives in an NSMenuItem's
-/// view, which is what lets a toggle act without dismissing the menu.
+/// One device: name, its current value, and a switch — or, for things a switch
+/// would misdescribe, whatever trailing control fits (a cover's open/stop/close,
+/// a button's Press). Lives in an NSMenuItem's view, which is what lets a
+/// control act without dismissing the menu.
 final class DeviceRowView: NSView {
     static let width: CGFloat = 280
 
@@ -17,6 +19,8 @@ final class DeviceRowView: NSView {
     private let valueLabel = NSTextField(labelWithString: "")
     private let toggle = NSSwitch()
     private let swatch = NSButton()
+    private let accessory: NSView?
+    private let showsSwitch: Bool
     private let onToggle: (Bool) -> Void
     private let onPickColor: (() -> Void)?
     /// How Home Assistant writes temperatures for this house, e.g. "°C".
@@ -24,14 +28,22 @@ final class DeviceRowView: NSView {
 
     var switchIsOn: Bool { toggle.state == .on }
 
-    /// - Parameter onPickColor: supplied only for a light whose bulb actually
-    ///   takes a colour; the row then shows a swatch that opens the picker.
+    /// - Parameters:
+    ///   - showsSwitch: false where the entity cannot honestly be switched —
+    ///     a player with no power control, a thermostat whose mode row does it.
+    ///   - accessory: a trailing control shown in the switch's place.
+    ///   - onPickColor: supplied only for a light whose bulb actually takes a
+    ///     colour; the row then shows a swatch that opens the picker.
     init(device: Device,
          state: EntityState?,
          temperatureUnit: String = "°",
+         showsSwitch: Bool? = nil,
+         accessory: NSView? = nil,
          onToggle: @escaping (Bool) -> Void,
          onPickColor: (() -> Void)? = nil) {
         self.device = device
+        self.showsSwitch = showsSwitch ?? device.kind.hasSwitch
+        self.accessory = accessory
         self.onToggle = onToggle
         self.onPickColor = onPickColor
         self.temperatureUnit = temperatureUnit
@@ -47,7 +59,7 @@ final class DeviceRowView: NSView {
         toggle.controlSize = .small
         toggle.target = self
         toggle.action = #selector(flipped)
-        toggle.isHidden = !device.kind.hasSwitch
+        toggle.isHidden = !self.showsSwitch
 
         // A colour well would be the obvious control, but NSColorWell opens the
         // panel by running its own tracking, which a tracking menu will not let
@@ -60,7 +72,7 @@ final class DeviceRowView: NSView {
         swatch.isHidden = onPickColor == nil
         swatch.toolTip = "Set colour"
 
-        for view in [nameLabel, valueLabel, swatch, toggle] {
+        for view in [nameLabel, valueLabel, swatch, toggle] + [accessory].compactMap({ $0 }) {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -70,22 +82,31 @@ final class DeviceRowView: NSView {
             valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             valueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: nameLabel.trailingAnchor, constant: 8),
         ]
-        if device.kind.hasSwitch {
+        // The control at the trailing edge, which the value text sits against.
+        var trailingControl: NSView?
+        if self.showsSwitch {
+            trailingControl = toggle
+        } else if let accessory {
+            trailingControl = accessory
+        }
+        if let trailingControl {
             constraints += [
-                toggle.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-                toggle.centerYAnchor.constraint(equalTo: centerYAnchor),
+                trailingControl.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+                trailingControl.centerYAnchor.constraint(equalTo: centerYAnchor),
             ]
         }
-        if onPickColor != nil {
+        valueLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        nameLabel.setContentCompressionResistancePriority(.defaultLow + 1, for: .horizontal)
+        if let trailingControl, onPickColor != nil {
             constraints += [
-                swatch.trailingAnchor.constraint(equalTo: toggle.leadingAnchor, constant: -8),
+                swatch.trailingAnchor.constraint(equalTo: trailingControl.leadingAnchor, constant: -8),
                 swatch.centerYAnchor.constraint(equalTo: centerYAnchor),
                 swatch.widthAnchor.constraint(equalToConstant: 14),
                 swatch.heightAnchor.constraint(equalToConstant: 14),
                 valueLabel.trailingAnchor.constraint(equalTo: swatch.leadingAnchor, constant: -8),
             ]
-        } else if device.kind.hasSwitch {
-            constraints.append(valueLabel.trailingAnchor.constraint(equalTo: toggle.leadingAnchor, constant: -8))
+        } else if let trailingControl {
+            constraints.append(valueLabel.trailingAnchor.constraint(equalTo: trailingControl.leadingAnchor, constant: -8))
         } else {
             constraints.append(valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14))
         }
@@ -97,7 +118,7 @@ final class DeviceRowView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(state: EntityState?) {
-        let available = state?.isAvailable ?? false
+        let available = device.kind == .button ? ButtonAvailability.isAvailable(state) : (state?.isAvailable ?? false)
         toggle.isEnabled = available
         toggle.state = (state?.isOn ?? false) ? .on : .off
         nameLabel.textColor = available ? .labelColor : .tertiaryLabelColor
@@ -150,25 +171,22 @@ final class DeviceRowView: NSView {
             return TemperatureRange.text(state: state, unit: temperatureUnit)
         case .mediaPlayer:
             return MediaCapabilities.text(state: state)
+        // No level yet — the moment after the switch flips, before the light
+        // reports one — shows nothing rather than a made-up 1%.
         case .light:
-            guard state.isOn else { return "" }
+            guard state.isOn, state.attributes["brightness"]?.double != nil else { return "" }
             return "\(LevelMath.brightnessPct(from: LevelMath.fraction(brightness: state.attributes["brightness"])))%"
         case .fan:
-            guard state.isOn else { return "" }
+            guard state.isOn, state.attributes["percentage"]?.double != nil else { return "" }
             return "\(Int((LevelMath.fraction(percentage: state.attributes["percentage"]) * 100).rounded()))%"
         case .cover(let positionable):
             let name = state.state.prefix(1).uppercased() + state.state.dropFirst()
             guard positionable, let position = state.attributes["current_position"]?.int else { return name }
             return "\(name) · \(position)%"
-        case .toggle:
+        case .toggle, .button:
             return ""
         case .sensor:
-            let unit = state.unit.map { " \($0)" } ?? ""
-            switch state.state {
-            case "on": return "On"
-            case "off": return "Off"
-            default: return state.state + unit
-            }
+            return SensorText.text(state)
         }
     }
 
