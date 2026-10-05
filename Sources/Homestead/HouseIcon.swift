@@ -11,9 +11,13 @@ import StatusItemKit
 /// Chooses the status glyph for a snapshot: the house mascot, with the weather
 /// outside it, or the plain dot if Icon ▸ Dot is selected.
 enum HouseIcon {
-    /// - Parameter door: progress through Gertie's once-a-minute welcome, 0 … 1
-    ///   (0 is the door shut, as always).
-    static func image(snapshot: Snapshot, appearance: MeterAppearance, door: CGFloat = 0) -> NSImage {
+    /// - Parameters:
+    ///   - door: progress through Gertie's welcome, 0 … 1 (0 is the door shut,
+    ///     as always).
+    ///   - weatherPhase: how far through the weather's loop, 0 ..< 1 (0 is the
+    ///     still sky).
+    static func image(snapshot: Snapshot, appearance: MeterAppearance, door: CGFloat = 0,
+                      weatherPhase: CGFloat = 0) -> NSImage {
         let configured = snapshot.connection != .unconfigured
         let reachable = snapshot.connection == .connected
 
@@ -29,8 +33,19 @@ enum HouseIcon {
             configured: configured,
             weather: reachable ? snapshot.weather?.sky.map(houseWeather) : nil,
             night: snapshot.weather?.night ?? false,
-            door: door
+            door: door,
+            weatherPhase: weatherPhase,
+            intensity: snapshot.weather?.intensity.map { CGFloat($0) }
         )
+    }
+
+    /// The weather the icon is showing, if it is one that moves: the house
+    /// icon, a house that is answering, and a sky to draw. Reduce Motion is
+    /// the caller's to check.
+    static func movingWeather(snapshot: Snapshot, appearance: MeterAppearance) -> HouseWeather? {
+        guard appearance.style == .character, snapshot.connection == .connected,
+              let sky = snapshot.weather?.sky else { return nil }
+        return houseWeather(sky)
     }
 
     /// Whether Gertie opens her door this minute: the house icon, and a house

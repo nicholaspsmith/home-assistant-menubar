@@ -12,21 +12,30 @@ public enum Sky: Equatable, Sendable {
     case clear, partlyCloudy, cloudy, rain, heavyRain, storm, snow, sleet, fog, wind
 }
 
-/// What the icon shows outside: the sky, whether it is night, and a line for
-/// the tooltip.
+/// What the icon shows outside: the sky, whether it is night, how hard it is
+/// coming down, and a line for the tooltip.
 public struct WeatherReport: Equatable, Sendable {
     public let sky: Sky?
     public let night: Bool
     public let summary: String
+    /// How hard it is raining or snowing, 0 (a drizzle) … 1 (a downpour); nil
+    /// when nothing is falling.
+    public let intensity: Double?
 
     /// - Parameters:
     ///   - weather: a `weather.*` entity's state.
     ///   - sun: `sun.sun`, which says whether it is night. A provider's own
     ///     `clear-night` and `sunny` outrank it.
-    public init?(weather: EntityState?, sun: EntityState?, unit: String) {
+    ///   - hourly: the entity's hourly forecast, from `weather/subscribe_forecast`,
+    ///     if it has one: where the precipitation comes from.
+    ///   - now: picks the forecast's current hour.
+    public init?(weather: EntityState?, sun: EntityState?, unit: String,
+                 hourly: [JSONValue]? = nil, now: Date = Date()) {
         guard let weather, weather.isAvailable else { return nil }
         let condition = weather.state
         sky = Self.sky(for: condition)
+        intensity = Self.precipitationIntensity(condition: condition, attributes: weather.attributes,
+                                                hourly: hourly, now: now)
         switch condition {
         case "clear-night": night = true
         case "sunny": night = false
@@ -69,6 +78,62 @@ public struct WeatherReport: Equatable, Sendable {
             let text = condition.replacingOccurrences(of: "-", with: " ")
             return text.prefix(1).uppercased() + text.dropFirst()
         }
+    }
+
+    /// How hard it is coming down, 0 … 1, for a condition where something
+    /// falls (nil otherwise). Providers differ in what they say, so this takes
+    /// the first of:
+    ///
+    /// 1. the chance of precipitation this hour, 0–100 % → 0 … 1 — from the
+    ///    hourly forecast, else the entity's own `precipitation_probability`
+    ///    (NWS gives this and no amount);
+    /// 2. the amount this hour in `precipitation_unit` (mm, cm or in), from a
+    ///    trace (0.15) up to 4 mm or more (1) — from the hourly forecast, else
+    ///    the entity's `precipitation` (met.no gives this and no chance);
+    /// 3. the condition alone: pouring 1, any other rain or snow 0.5.
+    public static func precipitationIntensity(condition: String, attributes: [String: JSONValue],
+                                              hourly: [JSONValue]?, now: Date) -> Double? {
+        let fallback: Double
+        switch condition {
+        case "pouring": fallback = 1
+        case "rainy", "snowy", "snowy-rainy", "hail", "lightning-rainy": fallback = 0.5
+        case "lightning": fallback = 0.3
+        default: return nil
+        }
+        let hour = currentHour(of: hourly ?? [], now: now)
+
+        if let chance = hour?["precipitation_probability"]?.double ?? attributes["precipitation_probability"]?.double,
+           chance.isFinite {
+            return min(max(chance / 100, 0), 1)
+        }
+        if let amount = hour?["precipitation"]?.double ?? attributes["precipitation"]?.double, amount.isFinite {
+            let millimetres: Double
+            switch attributes["precipitation_unit"]?.string?.lowercased() {
+            case "in": millimetres = amount * 25.4
+            case "cm": millimetres = amount * 10
+            default: millimetres = amount
+            }
+            return 0.15 + 0.85 * min(max(millimetres / 4, 0), 1)
+        }
+        return fallback
+    }
+
+    /// The forecast entry covering `now`: the latest that has begun, or the
+    /// first if none has yet. Entries without a readable time are skipped.
+    static func currentHour(of forecast: [JSONValue], now: Date) -> JSONValue? {
+        let timed = forecast.compactMap { entry -> (Date, JSONValue)? in
+            guard let text = entry["datetime"]?.string, let date = parseDate(text) else { return nil }
+            return (date, entry)
+        }.sorted { $0.0 < $1.0 }
+        return (timed.last { $0.0 <= now } ?? timed.first)?.1
+    }
+
+    private static func parseDate(_ text: String) -> Date? {
+        let plain = ISO8601DateFormatter()
+        if let date = plain.date(from: text) { return date }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: text)
     }
 
     /// Which `weather.*` entity to follow when none has been chosen: the one

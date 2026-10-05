@@ -8,6 +8,11 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.5.0] - 2026-10-05
+
+- The weather around the house moves, gently and all the time: the sun gleams and slowly turns, the moon glows while a star twinkles, clouds drift or pass behind the roof, rain and snow fall beside the walls, fog banks slide, gusts blow out and fade, and a thunderstorm's bolt flickers every so often. The windows stay clear, and the sky holds still under Reduce Motion
+- Rain falls as hard as Home Assistant says it is: from a few slow drops to a downpour, by the chance of rain this hour (from providers that give one, such as NWS) or the amount expected (such as Met.no's Forecast Home), else by the conditions. Snow thickens the same way
+
 ## [1.4.0] - 2026-10-05
 
 - Once a minute Gertie welcomes you: the house's front door swings open a crack and shuts again, with lamplight in the gap when a light is on. Only while Home Assistant is reachable. She takes her turn last, after Manny, when several Menumon mascots are running, and sits still under Reduce Motion
