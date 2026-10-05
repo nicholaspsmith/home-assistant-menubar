@@ -4,6 +4,8 @@
 
 <p align="center">Part of <strong><a href="https://menumon.nicksmith.software">Menumon</a></strong>.</p>
 
+<p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
+
 **Version 1.4.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
