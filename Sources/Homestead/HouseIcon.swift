@@ -11,7 +11,9 @@ import StatusItemKit
 /// Chooses the status glyph for a snapshot: the house mascot, with the weather
 /// outside it, or the plain dot if Icon ▸ Dot is selected.
 enum HouseIcon {
-    static func image(snapshot: Snapshot, appearance: MeterAppearance) -> NSImage {
+    /// - Parameter door: progress through Gertie's once-a-minute welcome, 0 … 1
+    ///   (0 is the door shut, as always).
+    static func image(snapshot: Snapshot, appearance: MeterAppearance, door: CGFloat = 0) -> NSImage {
         let configured = snapshot.connection != .unconfigured
         let reachable = snapshot.connection == .connected
 
@@ -26,8 +28,15 @@ enum HouseIcon {
             reachable: reachable,
             configured: configured,
             weather: reachable ? snapshot.weather?.sky.map(houseWeather) : nil,
-            night: snapshot.weather?.night ?? false
+            night: snapshot.weather?.night ?? false,
+            door: door
         )
+    }
+
+    /// Whether Gertie opens her door this minute: the house icon, and a house
+    /// that is answering. A hollow one has nobody home to open it.
+    static func welcomes(snapshot: Snapshot, appearance: MeterAppearance) -> Bool {
+        appearance.style == .character && snapshot.connection == .connected
     }
 
     /// The tooltip: what it is like outside, when the icon is showing it.

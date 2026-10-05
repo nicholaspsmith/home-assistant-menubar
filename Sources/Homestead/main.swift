@@ -28,6 +28,17 @@ final class App: NSObject, NSApplicationDelegate {
     private var dashboardsWindow: DashboardsWindowController?
     private(set) var model: AppModel!
     private var menuController: MenuController!
+    /// Gertie's once-a-minute welcome, in her turn with the other Menumon
+    /// mascots: the front door swings open a crack and shuts.
+    private var minuteCue: MinuteCue!
+    private var door: CGFloat = 0
+    private lazy var welcome = IconAnimation(duration: CharacterIcon.houseDoorDuration, frame: { [weak self] t in
+        self?.door = CGFloat(t / CharacterIcon.houseDoorDuration)
+        self?.refreshIcon()
+    }, completion: { [weak self] in
+        self?.door = 0
+        self?.refreshIcon()
+    })
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Before any window opens: it is what makes ⌘V work in them.
@@ -70,6 +81,13 @@ final class App: NSObject, NSApplicationDelegate {
         status.onMenuDidClose = { [weak self] in self?.menuController.menuClosed() }
         model.start()
         refreshIcon()
+
+        minuteCue = MinuteCue { [weak self] in
+            guard let self, let snapshot = self.model?.snapshot,
+                  HouseIcon.welcomes(snapshot: snapshot, appearance: self.appearance) else { return }
+            self.welcome.start()
+        }
+        minuteCue.start()
     }
 
     // MARK: - Menu
@@ -182,7 +200,7 @@ final class App: NSObject, NSApplicationDelegate {
 
     func refreshIcon() {
         let snapshot = model?.snapshot ?? Snapshot()
-        status.setIcon(HouseIcon.image(snapshot: snapshot, appearance: appearance))
+        status.setIcon(HouseIcon.image(snapshot: snapshot, appearance: appearance, door: door))
         status.button?.toolTip = HouseIcon.toolTip(snapshot: snapshot)
     }
 }
