@@ -18,6 +18,12 @@ selected dashboard, a fan turns in the right window while any fan is running,
 and the house goes hollow when Home Assistant cannot be reached — which is
 normal on a laptop that sometimes sits behind a VPN.
 
+The weather is outside it: sun or moon behind the roof, clouds over it, rain,
+snow, sleet or lightning beside the walls, fog and wind — from a Home Assistant
+`weather` entity, with `sun.sun` saying when it is night. Hover the icon for
+the conditions and temperature. **Weather ▸** picks the entity (Automatic
+prefers the Forecast Home one Home Assistant sets up) or turns it off.
+
 ## Install
 
 ```bash
