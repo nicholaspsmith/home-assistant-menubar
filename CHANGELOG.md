@@ -8,6 +8,10 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.4.0] - 2026-10-05
+
+- Once a minute Gertie welcomes you: the house's front door swings open a crack and shuts again, with lamplight in the gap when a light is on. Only while Home Assistant is reachable. She takes her turn last, after Manny, when several Menumon mascots are running, and sits still under Reduce Motion
+
 ## [1.3.0] - 2026-10-05
 
 - The house shows the weather outside: sun or moon behind the roof, clouds, rain, heavy rain, thunderstorms, snow, sleet, fog and wind, drawn around the house so the lit windows still count your lights. The moon replaces the sun after sunset.

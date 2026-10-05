@@ -4,7 +4,7 @@
 
 <p align="center">Part of <strong><a href="https://menumon.nicksmith.software">Menumon</a></strong>.</p>
 
-**Version 1.3.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.4.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -26,6 +26,15 @@ The icon is a cottage:
   sun or moon behind the roof (`sun.sun` decides night), clouds over it, rain,
   snow, sleet or lightning beside the walls, fog and wind. Hover the icon for
   the conditions and temperature.
+
+Once a minute Gertie welcomes you: the front door swings open a crack and
+shuts again (1.2 s), lamplight showing in the gap when a light is on. Only a
+house that is answering does it. When several Menumon mascots are running they
+take turns, a second apart: Archimedes (Claude Usage), Menu Pimp (Mac Daddy),
+Carol (SoundChain), Iguanamous (VPN & DNS), Armonitor (Monitor Lizard), Volta
+(Battery Time), Apollo (Apollo Monitor), Lumen (KeyLight), Manny (MacRecorder),
+then Gertie, counting only the ones that are running. Skipped when Reduce
+Motion is on.
 
 **Icon ▸ Dot** replaces the cottage with a plain dot; **Icon ▸ House** restores it.
 
