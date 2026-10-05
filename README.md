@@ -212,17 +212,3 @@ redistribute this software, including inside proprietary products, provided
 the copyright notice and license stay on these files and any modified
 versions of them are made available under the same license.
 
-## Why not a SwiftBar plugin?
-
-A plugin could not do what this app does:
-
-- **State is pushed, not polled.** Homestead holds one WebSocket to Home
-  Assistant and subscribes to exactly the entities on the selected dashboard,
-  so a change made elsewhere moves the row while the menu is open. A plugin is
-  a script re-run on a timer, polling the REST API and stale between runs.
-- **Real controls.** Switches, sliders and transport buttons are views in the
-  menu, so using one does not dismiss it. A plugin's dropdown is limited to
-  what its text protocol can express.
-- **The token is not in a shell script.** The app keeps it in the Keychain.
-- **Testable.** The protocol, dashboard parser, state diffing and service
-  calls are a library with unit tests.
