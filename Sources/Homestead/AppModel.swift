@@ -79,6 +79,12 @@ final class AppModel {
     private var skyStore = StateStore()
     private var skySubscriptionId: Int?
     private var weatherIds: [String] = []
+    /// The followed entity's hourly forecast, on one more subscription: where
+    /// the rain's intensity comes from. Nil until it arrives, or when the
+    /// provider has none.
+    private var forecastEntity: String?
+    private var forecastSubscriptionId: Int?
+    private var hourly: [JSONValue]?
 
     private(set) var snapshot = Snapshot()
     var onSnapshotChange: ((Snapshot) -> Void)?
@@ -107,6 +113,9 @@ final class AppModel {
         client = nil
         subscriptionId = nil
         skySubscriptionId = nil
+        forecastEntity = nil
+        forecastSubscriptionId = nil
+        hourly = nil
         store.reset()
         skyStore.reset()
         Task { await old?.disconnect() }
@@ -397,14 +406,53 @@ final class AppModel {
         case ""?: chosen = nil
         case let id?: chosen = weatherIds.contains(id) ? id : WeatherReport.automaticEntity(from: weatherIds)
         }
+        followForecast(of: chosen)
         let report = chosen.flatMap {
-            WeatherReport(weather: skyStore[$0], sun: skyStore["sun.sun"], unit: snapshot.temperatureUnit)
+            WeatherReport(weather: skyStore[$0], sun: skyStore["sun.sun"], unit: snapshot.temperatureUnit,
+                          hourly: hourly)
         }
         let entities = weatherIds.map { ($0, skyStore[$0]?.friendlyName ?? $0) }
         snapshot.weatherEntities = entities
         snapshot.weatherEntity = chosen
         snapshot.weather = report
         onWeatherChange?()
+    }
+
+    /// Subscribes to the followed entity's hourly forecast, dropping the last
+    /// one's. A provider without an hourly forecast refuses, and the icon falls
+    /// back to the entity's own attributes.
+    private func followForecast(of entity: String?) {
+        guard entity != forecastEntity, let client else { return }
+        let previous = forecastSubscriptionId
+        forecastEntity = entity
+        forecastSubscriptionId = nil
+        hourly = nil
+        Task { [weak self] in
+            if let previous { await client.unsubscribe(previous) }
+            guard let entity else { return }
+            do {
+                let id = try await client.subscribe([
+                    "type": .string("weather/subscribe_forecast"),
+                    "entity_id": .string(entity),
+                    "forecast_type": .string("hourly"),
+                ], onEvent: { [weak self] event in
+                    Task { @MainActor in self?.applyForecast(event, for: entity) }
+                })
+                guard let self, self.client === client, self.forecastEntity == entity else {
+                    await client.unsubscribe(id)
+                    return
+                }
+                self.forecastSubscriptionId = id
+            } catch {
+                self?.log.info("no hourly forecast: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    private func applyForecast(_ event: JSONValue, for entity: String) {
+        guard entity == forecastEntity else { return }
+        hourly = event["forecast"]?.array
+        updateWeather()
     }
 
     private func loadDashboards() async throws {

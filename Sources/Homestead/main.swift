@@ -40,6 +40,14 @@ final class App: NSObject, NSApplicationDelegate {
         self?.refreshIcon()
     })
 
+    /// The weather's own motion, continuous while it shows: sun gleaming,
+    /// clouds drifting, rain falling. The phase steps at the weather's frame
+    /// rate and the icon is redrawn only when it steps — never the menu.
+    private var weatherPhase: CGFloat = 0
+    private var weatherTimer: Timer?
+    private var weatherRate: Double = 0
+    private var weatherFrame = -1
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Before any window opens: it is what makes ⌘V work in them.
         MainMenu.install()
@@ -59,7 +67,10 @@ final class App: NSObject, NSApplicationDelegate {
         appearanceMenu = AppearanceMenu(appearance: appearance,
                                         styles: [.character, .dot],
                                         characterTitle: "House",
-                                        onChange: { [weak self] in self?.refreshIcon() })
+                                        onChange: { [weak self] in
+                                            self?.refreshIcon()
+                                            self?.updateWeatherMotion()
+                                        })
 
         // Keychain migrations run with the first token read, off the main
         // thread (TokenStore.loadInBackground): they can wait on a prompt.
@@ -72,15 +83,25 @@ final class App: NSObject, NSApplicationDelegate {
         )
         model.onSnapshotChange = { [weak self] _ in
             self?.refreshIcon()
+            self?.updateWeatherMotion()
             self?.menuController.rebuildIfOpen()
         }
-        model.onWeatherChange = { [weak self] in self?.refreshIcon() }
+        model.onWeatherChange = { [weak self] in
+            self?.refreshIcon()
+            self?.updateWeatherMotion()
+        }
         model.onEntitiesChanged = { [weak self] entities in
             self?.menuController.apply(entities: entities)
         }
         status.onMenuDidClose = { [weak self] in self?.menuController.menuClosed() }
         model.start()
         refreshIcon()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateWeatherMotion() }
+        }
+        updateWeatherMotion()
 
         minuteCue = MinuteCue { [weak self] in
             guard let self, let snapshot = self.model?.snapshot,
@@ -200,8 +221,52 @@ final class App: NSObject, NSApplicationDelegate {
 
     func refreshIcon() {
         let snapshot = model?.snapshot ?? Snapshot()
-        status.setIcon(HouseIcon.image(snapshot: snapshot, appearance: appearance, door: door))
-        status.button?.toolTip = HouseIcon.toolTip(snapshot: snapshot)
+        status.setIcon(HouseIcon.image(snapshot: snapshot, appearance: appearance, door: door,
+                                       weatherPhase: weatherPhase))
+        let tip = HouseIcon.toolTip(snapshot: snapshot)
+        if status.button?.toolTip != tip { status.button?.toolTip = tip }
+    }
+
+    /// Starts, retimes or stops the weather's motion: it runs only while the
+    /// house icon shows weather from a reachable Home Assistant, and never
+    /// under Reduce Motion, where the sky holds still.
+    private func updateWeatherMotion() {
+        let snapshot = model?.snapshot ?? Snapshot()
+        let weather = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            ? nil : HouseIcon.movingWeather(snapshot: snapshot, appearance: appearance)
+        guard let weather else {
+            weatherTimer?.invalidate()
+            weatherTimer = nil
+            weatherFrame = -1
+            if weatherPhase != 0 {
+                weatherPhase = 0
+                refreshIcon()
+            }
+            return
+        }
+        let rate = CharacterIcon.houseWeatherFrameRate(weather)
+        guard weatherTimer == nil || rate != weatherRate else { return }
+        weatherTimer?.invalidate()
+        weatherRate = rate
+        let timer = Timer(timeInterval: 1 / rate, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.weatherTick() }
+        }
+        timer.tolerance = 0.2 / rate
+        RunLoop.main.add(timer, forMode: .common)
+        weatherTimer = timer
+        weatherTick()
+    }
+
+    /// One step of the weather's loop, from the clock, so a late tick catches
+    /// up rather than slowing the sky. Redraws only when the frame changes.
+    private func weatherTick() {
+        let frames = Int((weatherRate * CharacterIcon.houseWeatherLoopDuration).rounded())
+        guard frames > 0 else { return }
+        let frame = Int((Date().timeIntervalSinceReferenceDate * weatherRate).rounded(.down)) % frames
+        guard frame != weatherFrame else { return }
+        weatherFrame = frame
+        weatherPhase = CGFloat(frame) / CGFloat(frames)
+        refreshIcon()
     }
 }
 
