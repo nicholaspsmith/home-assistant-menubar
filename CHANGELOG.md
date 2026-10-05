@@ -8,6 +8,12 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.3.0] - 2026-10-05
+
+- The house shows the weather outside: sun or moon behind the roof, clouds, rain, heavy rain, thunderstorms, snow, sleet, fog and wind, drawn around the house so the lit windows still count your lights. The moon replaces the sun after sunset.
+- Hover the icon for the conditions and temperature ("Rainy · 69°F").
+- **Weather ▸** chooses which weather entity to follow — Automatic (Forecast Home, when there is one), any other, or None. It only appears when Home Assistant has a weather entity.
+
 ## [1.2.0] - 2026-10-05
 
 ### Controls that match the device

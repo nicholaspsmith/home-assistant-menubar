@@ -14,6 +14,7 @@ public final class Settings {
         public static let showSensors = "ShowSensors"
         public static let visibleDashboards = "VisibleDashboards"
         public static let dashboardOrder = "DashboardOrder"
+        public static let weatherEntity = "WeatherEntity"
     }
 
     private let defaults: UserDefaults
@@ -37,6 +38,13 @@ public final class Settings {
     public var selectedDashboardPath: String? {
         get { defaults.string(forKey: Key.selectedDashboard) }
         set { defaults.set(newValue, forKey: Key.selectedDashboard) }
+    }
+
+    /// Which weather entity the icon follows: nil to pick one automatically,
+    /// empty for no weather at all.
+    public var weatherEntity: String? {
+        get { defaults.string(forKey: Key.weatherEntity) }
+        set { defaults.set(newValue, forKey: Key.weatherEntity) }
     }
 
     public var showSensors: Bool {

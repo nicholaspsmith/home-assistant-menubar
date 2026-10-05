@@ -63,6 +63,7 @@ final class App: NSObject, NSApplicationDelegate {
             self?.refreshIcon()
             self?.menuController.rebuildIfOpen()
         }
+        model.onWeatherChange = { [weak self] in self?.refreshIcon() }
         model.onEntitiesChanged = { [weak self] entities in
             self?.menuController.apply(entities: entities)
         }
@@ -89,6 +90,7 @@ final class App: NSObject, NSApplicationDelegate {
         menu.addItem(login)
 
         menu.addItem(appearanceMenu.menuItem())
+        if let weather = weatherMenuItem() { menu.addItem(weather) }
 
         let dashboards = NSMenuItem(title: "Dashboards…", action: #selector(openDashboards), keyEquivalent: "")
         dashboards.target = self
@@ -106,6 +108,43 @@ final class App: NSObject, NSApplicationDelegate {
         menu.addItem(AppVersion.menuItem())
         menu.addItem(NSMenuItem(title: "Quit Homestead",
                                 action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+    }
+
+    /// Weather ▸ Automatic, each weather entity, None. Absent when Home
+    /// Assistant has no weather entity at all.
+    private func weatherMenuItem() -> NSMenuItem? {
+        let snapshot = model.snapshot
+        guard !snapshot.weatherEntities.isEmpty else { return nil }
+        let submenu = NSMenu()
+        let chosen = settings.weatherEntity
+
+        let automaticName = WeatherReport.automaticEntity(from: snapshot.weatherEntities.map(\.id))
+            .flatMap { id in snapshot.weatherEntities.first { $0.id == id }?.name }
+        let automatic = NSMenuItem(title: automaticName.map { "Automatic (\($0))" } ?? "Automatic",
+                                   action: #selector(chooseWeather(_:)), keyEquivalent: "")
+        automatic.state = chosen == nil ? .on : .off
+        submenu.addItem(automatic)
+        submenu.addItem(.separator())
+        for entity in snapshot.weatherEntities {
+            let item = NSMenuItem(title: entity.name, action: #selector(chooseWeather(_:)), keyEquivalent: "")
+            item.representedObject = entity.id
+            item.state = chosen == entity.id ? .on : .off
+            submenu.addItem(item)
+        }
+        submenu.addItem(.separator())
+        let none = NSMenuItem(title: "None", action: #selector(chooseWeather(_:)), keyEquivalent: "")
+        none.representedObject = ""
+        none.state = chosen == "" ? .on : .off
+        submenu.addItem(none)
+        for item in submenu.items { item.target = self }
+
+        let item = NSMenuItem(title: "Weather", action: nil, keyEquivalent: "")
+        item.submenu = submenu
+        return item
+    }
+
+    @objc private func chooseWeather(_ sender: NSMenuItem) {
+        model.setWeatherEntity(sender.representedObject as? String)
     }
 
     @objc private func toggleSensors() {
@@ -142,7 +181,9 @@ final class App: NSObject, NSApplicationDelegate {
     // MARK: - Icon
 
     func refreshIcon() {
-        status.setIcon(HouseIcon.image(snapshot: model?.snapshot ?? Snapshot(), appearance: appearance))
+        let snapshot = model?.snapshot ?? Snapshot()
+        status.setIcon(HouseIcon.image(snapshot: snapshot, appearance: appearance))
+        status.button?.toolTip = HouseIcon.toolTip(snapshot: snapshot)
     }
 }
 

@@ -8,8 +8,8 @@ import AppKit
 import HomesteadCore
 import StatusItemKit
 
-/// Chooses the status glyph for a snapshot: the house mascot, or the plain dot
-/// if Icon ▸ Dot is selected.
+/// Chooses the status glyph for a snapshot: the house mascot, with the weather
+/// outside it, or the plain dot if Icon ▸ Dot is selected.
 enum HouseIcon {
     static func image(snapshot: Snapshot, appearance: MeterAppearance) -> NSImage {
         let configured = snapshot.connection != .unconfigured
@@ -24,8 +24,30 @@ enum HouseIcon {
             lightsOn: snapshot.lightsOn,
             fanOn: snapshot.anyFanOn,
             reachable: reachable,
-            configured: configured
+            configured: configured,
+            weather: reachable ? snapshot.weather?.sky.map(houseWeather) : nil,
+            night: snapshot.weather?.night ?? false
         )
+    }
+
+    /// The tooltip: what it is like outside, when the icon is showing it.
+    static func toolTip(snapshot: Snapshot) -> String? {
+        snapshot.connection == .connected ? snapshot.weather?.summary : nil
+    }
+
+    private static func houseWeather(_ sky: Sky) -> HouseWeather {
+        switch sky {
+        case .clear: return .clear
+        case .partlyCloudy: return .partlyCloudy
+        case .cloudy: return .cloudy
+        case .rain: return .rain
+        case .heavyRain: return .heavyRain
+        case .storm: return .storm
+        case .snow: return .snow
+        case .sleet: return .sleet
+        case .fog: return .fog
+        case .wind: return .wind
+        }
     }
 
     private static func color(for snapshot: Snapshot) -> NSColor {

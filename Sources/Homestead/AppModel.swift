@@ -26,6 +26,11 @@ struct Snapshot {
     var states: [String: EntityState] = [:]
     /// How this Home Assistant writes temperatures, from its own config.
     var temperatureUnit: String = "°"
+    /// Every `weather.*` entity, for the Weather submenu, with the one the
+    /// icon follows (nil when there is none, or weather is turned off).
+    var weatherEntities: [(id: String, name: String)] = []
+    var weatherEntity: String?
+    var weather: WeatherReport?
 
     var lightsOn: Int {
         groups.flatMap(\.devices)
@@ -69,10 +74,18 @@ final class AppModel {
     /// entities must rebuild the menu rather than be patched into rows that do
     /// not exist.
     private var awaitingFirstSnapshot = false
+    /// The weather entities and `sun.sun`, on a subscription of their own so
+    /// switching dashboards does not take the weather with it.
+    private var skyStore = StateStore()
+    private var skySubscriptionId: Int?
+    private var weatherIds: [String] = []
 
     private(set) var snapshot = Snapshot()
     var onSnapshotChange: ((Snapshot) -> Void)?
     var onEntitiesChanged: ((Set<String>) -> Void)?
+    /// The weather changed. Only the icon shows it, so this redraws that and
+    /// leaves an open menu alone.
+    var onWeatherChange: (() -> Void)?
 
     init(settings: Settings) {
         self.settings = settings
@@ -93,7 +106,9 @@ final class AppModel {
         let old = client
         client = nil
         subscriptionId = nil
+        skySubscriptionId = nil
         store.reset()
+        skyStore.reset()
         Task { await old?.disconnect() }
 
         guard let urlText = settings.haURL, let url = HAURL.websocketURL(from: urlText),
@@ -319,6 +334,7 @@ final class AppModel {
                 reconnectAttempt = 0
                 update { $0.connection = .connected }
                 await loadTemperatureUnit()
+                await loadWeather()
                 try await loadDashboards()
             } catch HAClientError.authInvalid {
                 update { $0.connection = .authFailed }
@@ -335,6 +351,60 @@ final class AppModel {
               let unit = config["unit_system"]?["temperature"]?.string
         else { return }
         update { $0.temperatureUnit = unit }
+    }
+
+    // MARK: - Weather
+
+    /// Lists the weather entities from the entity registry's display list —
+    /// small, where `get_states` is every entity in the house in one message —
+    /// and subscribes to them and the sun. All of them, not just the chosen
+    /// one: the submenu shows their names, and switching is instant.
+    private func loadWeather() async {
+        guard let client else { return }
+        let listing = try? await client.send(["type": .string("config/entity_registry/list_for_display")])
+        weatherIds = (listing?["entities"]?.array ?? [])
+            .compactMap { $0["ei"]?.string }
+            .filter { $0.hasPrefix("weather.") }
+            .sorted()
+        guard !weatherIds.isEmpty else { return }
+        do {
+            skySubscriptionId = try await client.subscribe([
+                "type": .string("subscribe_entities"),
+                "entity_ids": .array((weatherIds + ["sun.sun"]).map { .string($0) }),
+            ], onEvent: { [weak self] event in
+                Task { @MainActor in self?.applySkyEvent(event) }
+            })
+        } catch {
+            log.error("weather subscription failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private func applySkyEvent(_ event: JSONValue) {
+        guard !skyStore.apply(event).isEmpty else { return }
+        updateWeather()
+    }
+
+    /// Follow a different weather entity; nil picks one, "" turns it off.
+    func setWeatherEntity(_ entityId: String?) {
+        settings.weatherEntity = entityId
+        updateWeather()
+    }
+
+    private func updateWeather() {
+        let chosen: String?
+        switch settings.weatherEntity {
+        case nil: chosen = WeatherReport.automaticEntity(from: weatherIds)
+        case ""?: chosen = nil
+        case let id?: chosen = weatherIds.contains(id) ? id : WeatherReport.automaticEntity(from: weatherIds)
+        }
+        let report = chosen.flatMap {
+            WeatherReport(weather: skyStore[$0], sun: skyStore["sun.sun"], unit: snapshot.temperatureUnit)
+        }
+        let entities = weatherIds.map { ($0, skyStore[$0]?.friendlyName ?? $0) }
+        snapshot.weatherEntities = entities
+        snapshot.weatherEntity = chosen
+        snapshot.weather = report
+        onWeatherChange?()
     }
 
     private func loadDashboards() async throws {
