@@ -29,7 +29,7 @@ The icon is a cottage:
   snow, sleet or lightning beside the walls, fog and wind. Hover the icon for
   the conditions and temperature.
 
-Once a minute Gertie welcomes you: the front door swings open a crack and
+Now and then Gertie welcomes you: the front door swings open a crack and
 shuts again (1.2 s), lamplight showing in the gap when a light is on. Only a
 house that is answering does it. When several Menumon mascots are running they
 take turns, a second apart: Archimedes (Claude Usage), Menu Pimp (Mac Daddy),
