@@ -31,9 +31,11 @@ final class ThermostatTests: XCTestCase {
         XCTAssertEqual(kinds, [.thermostat, .thermostat])
     }
 
-    func testThermostatsHaveASwitchAndASlider() {
+    func testThermostatsHaveASwitchButNoSlider() {
+        // The target has a row of its own with steppers; a slider across
+        // 50–90 °F was too coarse to land on a degree.
         XCTAssertTrue(DeviceKind.thermostat.hasSwitch)
-        XCTAssertTrue(DeviceKind.thermostat.hasSlider)
+        XCTAssertFalse(DeviceKind.thermostat.hasSlider)
     }
 
     func testHeatingModesCountAsOnAndOffDoesNot() {
@@ -57,43 +59,67 @@ final class ThermostatTests: XCTestCase {
         XCTAssertEqual(bare.step, 0.5)
     }
 
-    func testDegenerateRangeDoesNotDivideByZero() {
-        let flat = TemperatureRange(state: state("heat", current: 20, target: 20, min: 20, max: 20))
-        XCTAssertEqual(flat.fraction(of: 20), 0)
-        XCTAssertEqual(flat.temperature(at: 0.5), 20)
+    func testFahrenheitDefaultsToWholeDegrees() {
+        // climate.hallway reports no target_temp_step; HA's own card moves it
+        // a degree at a time in °F.
+        let range = TemperatureRange(state: state("heat", current: 68, target: 68, min: 50, max: 90, step: nil), unit: "°F")
+        XCTAssertEqual(range.step, 1)
     }
 
-    func testFractionMapsAcrossTheRange() {
-        let range = TemperatureRange(state: state("heat", current: 20, target: 22, min: 10, max: 30))
-        XCTAssertEqual(range.fraction(of: 10), 0, accuracy: 0.001)
-        XCTAssertEqual(range.fraction(of: 20), 0.5, accuracy: 0.001)
-        XCTAssertEqual(range.fraction(of: 30), 1, accuracy: 0.001)
-        XCTAssertEqual(range.fraction(of: 40), 1, accuracy: 0.001)   // clamped
-    }
-
-    func testTemperatureSnapsToTheEntitysStep() {
+    func testClampSnapsToTheStepAndStaysInTheBand() {
         let range = TemperatureRange(state: state("heat", current: 20, target: 22, min: 10, max: 30, step: 0.5))
-        XCTAssertEqual(range.temperature(at: 0.51), 20.0, accuracy: 0.001)
-        XCTAssertEqual(range.temperature(at: 0.53), 20.5, accuracy: 0.001)
+        XCTAssertEqual(range.clamp(20.3), 20.5)
+        XCTAssertEqual(range.clamp(40), 30)
+        XCTAssertEqual(range.clamp(-3), 10)
+    }
 
-        let wholeDegrees = TemperatureRange(state: state("heat", current: 20, target: 22, min: 10, max: 30, step: 1))
-        XCTAssertEqual(wholeDegrees.temperature(at: 0.53), 21, accuracy: 0.001)
+    // MARK: - Targets
+
+    private func band(low: Double, high: Double) -> EntityState {
+        EntityState(state: "heat_cool", attributes: [
+            "temperature": .null, "target_temp_low": .number(low), "target_temp_high": .number(high),
+            "min_temp": .number(50), "max_temp": .number(90),
+        ])
+    }
+
+    func testTargetsReadOneTemperatureOrAHeatCoolBand() {
+        XCTAssertEqual(ThermostatTargets.current(of: state("heat", current: 20, target: 22)), .single(22))
+        XCTAssertEqual(ThermostatTargets.current(of: band(low: 65, high: 68)), .range(low: 65, high: 68))
+        XCTAssertNil(ThermostatTargets.current(of: EntityState(state: "off")))
+        XCTAssertEqual(ThermostatTargets.range(low: 65, high: 68).edges, [.low, .high])
+    }
+
+    func testNudgingMovesOneStepAndClamps() {
+        let range = TemperatureRange(state: state("heat", current: 96, target: 96, min: 80, max: 104, step: 1), unit: "°F")
+        XCTAssertEqual(ThermostatTargets.single(96).nudged(.single, by: 1, in: range), .single(97))
+        XCTAssertEqual(ThermostatTargets.single(104).nudged(.single, by: 1, in: range), .single(104))
+    }
+
+    func testBandEndsNeverCross() {
+        let range = TemperatureRange(state: band(low: 65, high: 68), unit: "°F")
+        let targets = ThermostatTargets.range(low: 66, high: 68)
+        XCTAssertEqual(targets.nudged(.low, by: 1, in: range), .range(low: 67, high: 68))
+        XCTAssertEqual(targets.nudged(.low, by: 3, in: range), .range(low: 67, high: 68))
+        XCTAssertEqual(targets.nudged(.high, by: -5, in: range), .range(low: 66, high: 67))
+        XCTAssertEqual(targets.nudged(.high, by: 1, in: range), .range(low: 66, high: 69))
     }
 
     // MARK: - Calls
 
-    func testSettingATemperatureUsesTheEntitysOwnDomain() {
-        let climate = ServiceCall.setLevel(thermostat, fraction: 0.5,
-                                           state: state("heat", current: 20, target: 22, min: 10, max: 30))
-        XCTAssertEqual(climate, ServiceCall(domain: "climate", service: "set_temperature",
-                                            entityId: "climate.hallway",
-                                            serviceData: ["temperature": .number(20)]))
+    func testSettingTargetsUsesTheEntitysOwnDomain() {
+        XCTAssertEqual(ServiceCall.setTargets(thermostat, .range(low: 65, high: 68)),
+                       ServiceCall(domain: "climate", service: "set_temperature", entityId: "climate.hallway",
+                                   serviceData: ["target_temp_low": .number(65), "target_temp_high": .number(68)]))
+        XCTAssertEqual(ServiceCall.setTargets(hotTub, .single(39)),
+                       ServiceCall(domain: "water_heater", service: "set_temperature", entityId: "water_heater.hot_tub",
+                                   serviceData: ["temperature": .number(39)]))
+    }
 
-        let water = ServiceCall.setLevel(hotTub, fraction: 1,
-                                         state: state("eco", current: 38, target: 39, min: 30, max: 40))
-        XCTAssertEqual(water, ServiceCall(domain: "water_heater", service: "set_temperature",
-                                          entityId: "water_heater.hot_tub",
-                                          serviceData: ["temperature": .number(40)]))
+    func testModeIsSetOnClimateOnly() {
+        XCTAssertEqual(ServiceCall.setHVACMode(thermostat, "cool"),
+                       ServiceCall(domain: "climate", service: "set_hvac_mode", entityId: "climate.hallway",
+                                   serviceData: ["hvac_mode": .string("cool")]))
+        XCTAssertNil(ServiceCall.setHVACMode(hotTub, "heat"))
     }
 
     func testThermostatsToggleWithTheirOwnDomain() {
@@ -107,20 +133,19 @@ final class ThermostatTests: XCTestCase {
 
     // MARK: - Reading
 
-    func testTemperatureTextShowsTheReadingAndTheTarget() {
-        let heating = state("heat", current: 20.5, target: 22)
-        XCTAssertEqual(TemperatureRange.text(state: heating, unit: "°C"), "20.5°C → 22°C")
+    func testTemperatureTextShowsTheReadingAndWhatItIsDoing() {
+        var cooling = band(low: 65, high: 68)
+        cooling.attributes["current_temperature"] = .number(68)
+        cooling.attributes["hvac_action"] = .string("cooling")
+        XCTAssertEqual(TemperatureRange.text(state: cooling, unit: "°F"), "68°F · Cooling")
 
-        // Off: the target is not being worked towards, so only the reading.
+        // Off: nothing is happening, so only the reading.
         XCTAssertEqual(TemperatureRange.text(state: state("off", current: 20.5, target: 22), unit: "°C"), "20.5°C")
-
-        // A thermostat with no sensor of its own still shows what it is set to.
-        XCTAssertEqual(TemperatureRange.text(state: state("heat", current: nil, target: 22), unit: "°F"), "→ 22°F")
         XCTAssertEqual(TemperatureRange.text(state: EntityState(state: "heat"), unit: "°C"), "")
     }
 
-    func testTemperatureTextDropsATrailingZero() {
-        XCTAssertEqual(TemperatureRange.text(state: state("heat", current: 21.0, target: 22.5), unit: "°C"),
-                       "21°C → 22.5°C")
+    func testTemperatureFormatDropsATrailingZero() {
+        XCTAssertEqual(TemperatureRange.format(21.0), "21")
+        XCTAssertEqual(TemperatureRange.format(22.5), "22.5")
     }
 }

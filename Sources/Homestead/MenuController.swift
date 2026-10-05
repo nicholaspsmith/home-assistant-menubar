@@ -21,11 +21,10 @@ final class MenuController: NSObject, NSWindowDelegate {
     private let onOpenConnection: () -> Void
 
     private weak var menu: NSMenu?
-    private var rows: [String: (item: NSMenuItem, view: DeviceRowView)] = [:]
-    private var sliders: [String: (item: NSMenuItem, view: LevelSliderView)] = [:]
-    private var warmthSliders: [String: (item: NSMenuItem, view: LevelSliderView)] = [:]
-    private var transportRows: [String: NSMenuItem] = [:]
-    private var devices: [String: Device] = [:]
+    /// Everything on screen that shows an entity, by entity id. One entity can
+    /// drive many rows — a remote backs every key of its D-pad — so updates
+    /// fan out to all of them.
+    private var updaters: [String: [(EntityState?) -> Void]] = [:]
     /// Whether the dashboard list is showing. Reset whenever the menu closes,
     /// so it always opens on the devices.
     private var pickerExpanded = false
@@ -50,11 +49,7 @@ final class MenuController: NSObject, NSWindowDelegate {
 
     func build(_ menu: NSMenu) {
         self.menu = menu
-        rows.removeAll()
-        sliders.removeAll()
-        warmthSliders.removeAll()
-        transportRows.removeAll()
-        devices.removeAll()
+        updaters.removeAll()
 
         let snapshot = model.snapshot
 
@@ -80,63 +75,189 @@ final class MenuController: NSObject, NSWindowDelegate {
             header.isEnabled = false
             menu.addItem(header)
 
-            for device in group.devices {
-                devices[device.entityId] = device
-                let state = snapshot.states[device.entityId]
-
-                let rowItem = NSMenuItem()
-                let canPickColor = device.kind == .light && LightCapabilities.supportsColor(state)
-                let rowView = DeviceRowView(
-                    device: device,
-                    state: state,
-                    temperatureUnit: snapshot.temperatureUnit,
-                    onToggle: { [weak self] on in self?.toggled(device, on: on) },
-                    onPickColor: canPickColor ? { [weak self] in self?.pickColor(for: device) } : nil
-                )
-                rowItem.view = rowView
-                menu.addItem(rowItem)
-                rows[device.entityId] = (rowItem, rowView)
-
-                if device.kind == .mediaPlayer {
-                    addMediaControls(to: menu, device: device, state: state)
+            // Buttons from one dashboard grid share a grid here, in its
+            // columns; a lone one is a row with a Press button.
+            var index = group.devices.startIndex
+            while index < group.devices.endIndex {
+                let device = group.devices[index]
+                guard device.kind == .button else {
+                    addDevice(device, to: menu, snapshot: snapshot)
+                    index += 1
                     continue
                 }
-
-                guard device.kind.hasSlider else { continue }
-                let sliderItem = NSMenuItem()
-                let sliderView = LevelSliderView(
-                    style: .level(device.kind),
-                    fraction: Self.fraction(device: device, state: state),
-                    caption: Self.sliderCaption(device: device, state: state, snapshot: snapshot)
-                ) { [weak self] value in
-                    self?.model.setLevel(device, fraction: value)
+                let run = Array(group.devices[index...].prefix { $0.kind == .button && $0.layout == device.layout })
+                index += run.count
+                if run.count == 1 {
+                    addButtonRow(device, to: menu, snapshot: snapshot)
+                } else {
+                    addButtonGrid(run, to: menu, snapshot: snapshot)
                 }
-                sliderItem.view = sliderView
-                sliderItem.isHidden = Self.sliderIsHidden(device: device, state: state)
-                menu.addItem(sliderItem)
-                sliders[device.entityId] = (sliderItem, sliderView)
-
-                // A tunable-white bulb gets a second slider. Colour and warmth
-                // are different questions: the picker cannot express a precise
-                // white, and this cannot express a colour.
-                guard device.kind == .light, LightCapabilities.supportsColorTemperature(state) else { continue }
-                let warmthItem = NSMenuItem()
-                let warmthView = LevelSliderView(
-                    style: .warmth,
-                    fraction: Self.warmthFraction(state: state),
-                    caption: Self.warmthCaption(state: state)
-                ) { [weak self] value in
-                    self?.model.setColorTemperature(device, fraction: value)
-                }
-                warmthItem.view = warmthView
-                warmthItem.isHidden = Self.sliderIsHidden(device: device, state: state)
-                menu.addItem(warmthItem)
-                warmthSliders[device.entityId] = (warmthItem, warmthView)
             }
         }
 
         menu.addItem(.separator())
         addSettingsItems(menu)
+    }
+
+    /// Adds a menu item showing `view`, kept current from `entityId`'s state:
+    /// `update` refreshes the view and `hidden` decides whether it shows at all
+    /// (an open NSMenu re-lays out when an item's `isHidden` changes).
+    @discardableResult
+    private func addItem(_ view: NSView, to menu: NSMenu, entityId: String, state: EntityState?,
+                         hidden: ((EntityState?) -> Bool)? = nil,
+                         update: ((EntityState?) -> Void)? = nil) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.view = view
+        item.isHidden = hidden?(state) ?? false
+        menu.addItem(item)
+        updaters[entityId, default: []].append { state in
+            update?(state)
+            if let hidden { item.isHidden = hidden(state) }
+        }
+        return item
+    }
+
+    private static func isOff(_ state: EntityState?) -> Bool { !(state?.isOn ?? false) }
+
+    private func addDevice(_ device: Device, to menu: NSMenu, snapshot: Snapshot) {
+        let state = snapshot.states[device.entityId]
+        let unit = snapshot.temperatureUnit
+        let modes = device.domain == "climate" ? ThermostatModeView.modes(of: state) : []
+
+        var showsSwitch: Bool?
+        var accessory: NSView?
+        var updateAccessory: ((EntityState?) -> Void)?
+        switch device.kind {
+        case .mediaPlayer:
+            showsSwitch = MediaCapabilities.supportsPower(state)
+        case .thermostat where modes.count > 1:
+            showsSwitch = false
+        case .cover where CoverControlsView.hasControls(state):
+            let controls = CoverControlsView(state: state) { [weak self] motion in
+                self?.model.moveCover(device, motion)
+            }
+            accessory = controls
+            updateAccessory = controls.update(state:)
+        default:
+            break
+        }
+
+        let canPickColor = device.kind == .light && LightCapabilities.supportsColor(state)
+        let row = DeviceRowView(
+            device: device,
+            state: state,
+            temperatureUnit: unit,
+            showsSwitch: showsSwitch,
+            accessory: accessory,
+            onToggle: { [weak self] on in self?.toggled(device, on: on) },
+            onPickColor: canPickColor ? { [weak self] in self?.pickColor(for: device) } : nil
+        )
+        addItem(row, to: menu, entityId: device.entityId, state: state) { state in
+            row.update(state: state)
+            updateAccessory?(state)
+        }
+
+        switch device.kind {
+        case .mediaPlayer:
+            addMediaControls(to: menu, device: device, state: state)
+
+        case .thermostat:
+            if modes.count > 1 {
+                let modeView = ThermostatModeView(modes: modes, state: state) { [weak self] mode in
+                    self?.model.setHVACMode(device, mode)
+                }
+                addItem(modeView, to: menu, entityId: device.entityId, state: state, update: modeView.update(state:))
+            }
+            let target = ThermostatTargetView(state: state, unit: unit) { [weak self] targets in
+                self?.model.setTargets(device, targets)
+            }
+            addItem(target, to: menu, entityId: device.entityId, state: state,
+                    hidden: { !ThermostatTargetView.hasTargets($0) }, update: target.update(state:))
+
+        case .light, .fan, .cover:
+            guard device.kind.hasSlider else { return }
+            // A shade's position is worth setting while it is closed — that is
+            // how you open it half-way — so its slider never hides.
+            let hidden: (EntityState?) -> Bool = device.kind == .light || device.kind == .fan ? Self.isOff : { _ in false }
+            let slider = LevelSliderView(style: .level(device.kind),
+                                         fraction: Self.fraction(device: device, state: state)) { [weak self] value in
+                self?.model.setLevel(device, fraction: value)
+            }
+            addItem(slider, to: menu, entityId: device.entityId, state: state, hidden: hidden) { state in
+                slider.update(fraction: Self.fraction(device: device, state: state))
+            }
+
+            // A tunable-white bulb gets a second slider. Colour and warmth
+            // are different questions: the picker cannot express a precise
+            // white, and this cannot express a colour.
+            guard device.kind == .light, LightCapabilities.supportsColorTemperature(state) else { return }
+            let warmth = LevelSliderView(style: .warmth,
+                                         fraction: Self.warmthFraction(state: state),
+                                         caption: Self.warmthCaption(state: state)) { [weak self] value in
+                self?.model.setColorTemperature(device, fraction: value)
+            }
+            addItem(warmth, to: menu, entityId: device.entityId, state: state, hidden: Self.isOff) { state in
+                warmth.update(fraction: Self.warmthFraction(state: state), caption: Self.warmthCaption(state: state))
+            }
+
+        case .toggle, .sensor, .button:
+            break
+        }
+    }
+
+    /// One button on its own: a row with its name and a Press button.
+    private func addButtonRow(_ device: Device, to menu: NSMenu, snapshot: Snapshot) {
+        let state = snapshot.states[device.entityId]
+        let verb: String
+        switch device.action?.domain ?? device.domain {
+        case "script": verb = "Run"
+        case "scene": verb = "Activate"
+        default: verb = "Press"
+        }
+        let press = PressButton(title: verb, symbol: nil, iconOnly: false,
+                                confirmation: device.action?.confirmation) { [weak self] in
+            self?.model.press(device)
+        }
+        let row = DeviceRowView(device: device, state: state, showsSwitch: false, accessory: press, onToggle: { _ in })
+        addItem(row, to: menu, entityId: device.entityId, state: state) { state in
+            row.update(state: state)
+            press.isEnabled = ButtonAvailability.isAvailable(state)
+        }
+        press.isEnabled = ButtonAvailability.isAvailable(state)
+    }
+
+    private func addButtonGrid(_ devices: [Device], to menu: NSMenu, snapshot: Snapshot) {
+        let grid = ButtonGridView(devices: devices, columns: devices.first?.layout?.columns ?? 3) { [weak self] device in
+            self?.model.press(device)
+        }
+        let item = NSMenuItem()
+        item.view = grid
+        menu.addItem(item)
+        for entityId in Set(devices.map(\.entityId)) {
+            grid.update(entityId: entityId, state: snapshot.states[entityId])
+            updaters[entityId, default: []].append { grid.update(entityId: entityId, state: $0) }
+        }
+    }
+
+    /// A player's controls are whatever it says it has: a TV with no transport
+    /// gets only a volume slider, a speaker with no volume only a play button.
+    private func addMediaControls(to menu: NSMenu, device: Device, state: EntityState?) {
+        if MediaCapabilities.supportsVolume(state) {
+            let slider = LevelSliderView(style: .level(.mediaPlayer),
+                                         fraction: MediaCapabilities.volume(of: state) ?? 0) { [weak self] value in
+                self?.model.setLevel(device, fraction: value)
+            }
+            addItem(slider, to: menu, entityId: device.entityId, state: state, hidden: Self.isOff) { state in
+                slider.update(fraction: MediaCapabilities.volume(of: state) ?? 0)
+            }
+        }
+
+        guard TransportRowView.hasControls(state) else { return }
+        let transport = TransportRowView(state: state) { [weak self] control in
+            self?.model.transport(device, control)
+        }
+        addItem(transport, to: menu, entityId: device.entityId, state: state,
+                hidden: Self.isOff, update: transport.update(state:))
     }
 
     /// The dashboard picker expands in place rather than opening a submenu or a
@@ -146,33 +267,6 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// and the menu stays open, so choosing a dashboard swaps the device rows
     /// under the pointer. While the list is expanded the device rows are hidden,
     /// which keeps the menu from becoming a two-screen-tall list.
-    /// A player's controls are whatever it says it has: a TV with no transport
-    /// gets only a volume slider, a speaker with no volume only a play button.
-    private func addMediaControls(to menu: NSMenu, device: Device, state: EntityState?) {
-        let hidden = !(state?.isOn ?? false)
-
-        if MediaCapabilities.supportsVolume(state) {
-            let item = NSMenuItem()
-            let view = LevelSliderView(style: .level(.mediaPlayer),
-                                       fraction: MediaCapabilities.volume(of: state) ?? 0) { [weak self] value in
-                self?.model.setLevel(device, fraction: value)
-            }
-            item.view = view
-            item.isHidden = hidden
-            menu.addItem(item)
-            sliders[device.entityId] = (item, view)
-        }
-
-        guard MediaCapabilities.supportsPlayPause(state) || MediaCapabilities.supportsSkip(state) else { return }
-        let item = NSMenuItem()
-        item.view = TransportRowView(showsSkip: MediaCapabilities.supportsSkip(state)) { [weak self] control in
-            self?.model.transport(device, control)
-        }
-        item.isHidden = hidden
-        menu.addItem(item)
-        transportRows[device.entityId] = item
-    }
-
     private func addPicker(to menu: NSMenu, snapshot: Snapshot) {
         let title = snapshot.selected?.title ?? "Dashboard"
         let headerItem = NSMenuItem()
@@ -229,21 +323,8 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// under the cursor would fight whatever the user is doing in it.
     func apply(entities: Set<String>) {
         for entityId in entities {
-            guard let device = devices[entityId] else { continue }
             let state = model.state(for: entityId)
-            rows[entityId]?.view.update(state: state)
-
-            if let slider = sliders[entityId] {
-                slider.item.isHidden = Self.sliderIsHidden(device: device, state: state)
-                slider.view.update(fraction: Self.fraction(device: device, state: state),
-                                   caption: Self.sliderCaption(device: device, state: state, snapshot: model.snapshot))
-            }
-            transportRows[entityId]?.isHidden = Self.sliderIsHidden(device: device, state: state)
-            if let warmth = warmthSliders[entityId] {
-                warmth.item.isHidden = Self.sliderIsHidden(device: device, state: state)
-                warmth.view.update(fraction: Self.warmthFraction(state: state),
-                                   caption: Self.warmthCaption(state: state))
-            }
+            updaters[entityId]?.forEach { $0(state) }
         }
     }
 
@@ -253,15 +334,6 @@ final class MenuController: NSObject, NSWindowDelegate {
         guard let menu, !menu.items.isEmpty else { return }
         menu.removeAllItems()
         build(menu)
-    }
-
-    /// A level slider is only useful while the device is doing something —
-    /// except a thermostat's, where the set point matters whether or not it is
-    /// currently heating, and is usually what you want to change before
-    /// turning it on.
-    private static func sliderIsHidden(device: Device, state: EntityState?) -> Bool {
-        guard device.kind != .thermostat else { return false }
-        return !(state?.isOn ?? false)
     }
 
     private static func warmthFraction(state: EntityState?) -> Double {
@@ -280,21 +352,9 @@ final class MenuController: NSObject, NSWindowDelegate {
         case .light: return LevelMath.fraction(brightness: state.attributes["brightness"])
         case .fan: return LevelMath.fraction(percentage: state.attributes["percentage"])
         case .cover: return LevelMath.fraction(percentage: state.attributes["current_position"])
-        case .thermostat:
-            // The slider sets the target, so it sits where the target is — not
-            // where the room currently happens to be.
-            guard let target = TemperatureRange.target(of: state) else { return 0 }
-            return TemperatureRange(state: state).fraction(of: target)
         case .mediaPlayer: return MediaCapabilities.volume(of: state) ?? 0
-        case .toggle, .sensor: return 0
+        case .thermostat, .toggle, .sensor, .button: return 0
         }
-    }
-
-    /// A thermostat's slider says what temperature it is setting; a brightness
-    /// slider needs no caption, since the row already shows the percentage.
-    private static func sliderCaption(device: Device, state: EntityState?, snapshot: Snapshot) -> String? {
-        guard device.kind == .thermostat, let target = TemperatureRange.target(of: state) else { return nil }
-        return TemperatureRange.format(target) + snapshot.temperatureUnit
     }
 
     // MARK: - Actions
@@ -302,10 +362,9 @@ final class MenuController: NSObject, NSWindowDelegate {
     private func toggled(_ device: Device, on: Bool) {
         model.toggle(device, on: on)
         // Show the sliders immediately; the confirming state event follows.
-        guard device.kind != .thermostat else { return }
-        sliders[device.entityId]?.item.isHidden = !on
-        warmthSliders[device.entityId]?.item.isHidden = !on
-        transportRows[device.entityId]?.isHidden = !on
+        guard device.kind != .thermostat, var state = model.state(for: device.entityId) else { return }
+        state.state = on ? "on" : "off"
+        updaters[device.entityId]?.forEach { $0(state) }
     }
 
     private func choose(_ dashboard: DashboardListing) {

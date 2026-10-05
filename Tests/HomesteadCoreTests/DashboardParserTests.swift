@@ -152,4 +152,96 @@ final class DashboardParserTests: XCTestCase {
         XCTAssertEqual(try parse(#"{"views":[]}"#), [])
         XCTAssertEqual(try parse(#"{}"#), [])
     }
+
+    // MARK: - Buttons
+
+    /// The Studio TV dashboard: every key is a tile on the one remote entity,
+    /// each sending its own command. They used to collapse into a single row —
+    /// the first, "Back" — showing the remote's on/off switch.
+    func testRemoteKeyTilesOnOneEntityAreSeparateButtons() throws {
+        let refs = try parse(#"""
+        {"views":[{"title":"Studio TV","sections":[{"type":"grid","cards":[
+            {"type":"heading","heading":"Remote","heading_style":"subtitle"},
+            {"type":"grid","columns":3,"cards":[
+                {"type":"tile","entity":"remote.tv","name":"Back","icon":"mdi:arrow-left",
+                 "tap_action":{"action":"perform-action","perform_action":"remote.send_command",
+                               "target":{"entity_id":"remote.tv"},"data":{"command":"BACK"}}},
+                {"type":"tile","entity":"remote.tv","name":"Up","icon":"mdi:chevron-up",
+                 "tap_action":{"action":"perform-action","perform_action":"remote.send_command",
+                               "target":{"entity_id":"remote.tv"},"data":{"command":"DPAD_UP"}}}
+            ]}
+        ]}]}]}
+        """#)
+
+        XCTAssertEqual(refs.map(\.nameOverride), ["Back", "Up"])
+        XCTAssertEqual(refs.map(\.header), ["Remote", "Remote"])
+        XCTAssertEqual(refs.map(\.icon), ["mdi:arrow-left", "mdi:chevron-up"])
+        XCTAssertEqual(refs[0].action, CardAction(domain: "remote", service: "send_command",
+                                                  entityIds: ["remote.tv"], data: ["command": .string("BACK")]))
+
+        let devices = DeviceCatalog.build(refs: refs, states: [:], showSensors: false).flatMap(\.devices)
+        XCTAssertEqual(devices.map(\.kind), [.button, .button])
+        XCTAssertEqual(ServiceCall.press(devices[1]),
+                       ServiceCall(domain: "remote", service: "send_command", entityId: "remote.tv",
+                                   serviceData: ["command": .string("DPAD_UP")]))
+    }
+
+    /// The Master dashboard's remote is `button` cards with no `entity` at all —
+    /// only a target in the action. They used to vanish.
+    func testButtonCardsWithoutAnEntityUseTheirTarget() throws {
+        let refs = try parse(#"""
+        {"views":[{"title":"Master","cards":[
+            {"type":"button","name":"Down","icon":"mdi:volume-minus",
+             "tap_action":{"action":"perform-action","perform_action":"media_player.volume_down",
+                           "target":{"entity_id":"media_player.roku"}}}
+        ]}]}
+        """#)
+        XCTAssertEqual(refs.map(\.entityId), ["media_player.roku"])
+        XCTAssertEqual(refs.first?.action?.service, "volume_down")
+    }
+
+    func testAnEntitysOwnToggleIsTheEntityNotAButton() throws {
+        let refs = try parse(#"""
+        {"views":[{"title":"Master","cards":[
+            {"type":"tile","entity":"media_player.xbox","name":"Xbox",
+             "tap_action":{"action":"perform-action","perform_action":"media_player.toggle",
+                           "target":{"entity_id":"media_player.xbox"}}},
+            {"type":"tile","entity":"light.lamp","tap_action":{"action":"more-info"}}
+        ]}]}
+        """#)
+        XCTAssertEqual(refs.map(\.entityId), ["media_player.xbox", "light.lamp"])
+        XCTAssertEqual(refs.map(\.action), [nil, nil])
+    }
+
+    func testConfirmationAndLegacyCallServiceAreRead() throws {
+        let refs = try parse(#"""
+        {"views":[{"title":"Hot Tub","cards":[
+            {"type":"tile","entity":"button.restart","tap_action":{"action":"perform-action",
+             "perform_action":"button.press","target":{"entity_id":"button.restart"},
+             "confirmation":{"text":"Restart the spa controller?"}}},
+            {"type":"button","name":"Movie","tap_action":{"action":"call-service","service":"script.turn_on",
+             "service_data":{"entity_id":"script.movie"}}}
+        ]}]}
+        """#)
+        XCTAssertEqual(refs[0].action?.confirmation, "Restart the spa controller?")
+        XCTAssertEqual(refs[1].action, CardAction(domain: "script", service: "turn_on", entityIds: ["script.movie"]))
+    }
+
+    // MARK: - Headings
+
+    func testHeadingCardsTitleTheCardsAfterThem() throws {
+        let refs = try parse(#"""
+        {"views":[{"title":"My Home","sections":[{"type":"grid","cards":[
+            {"type":"heading","heading":"Kitchen"},
+            {"type":"tile","entity":"light.kitchen"},
+            {"type":"heading","heading":"Read from iLO over IPMI — updates every 5 min","heading_style":"subtitle"},
+            {"type":"tile","entity":"light.counter"},
+            {"type":"heading","heading":"Hall","heading_style":"subtitle"},
+            {"type":"tile","entity":"light.hall"}
+        ]}, {"type":"grid","cards":[{"type":"tile","entity":"fan.patio"}]}]}]}
+        """#)
+        // A long subtitle is a description, not a name; the next section
+        // starts again from the view's title.
+        XCTAssertEqual(refs.map(\.header), ["Kitchen", "Kitchen", "Hall", "My Home"])
+    }
 }

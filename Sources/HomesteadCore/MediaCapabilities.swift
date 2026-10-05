@@ -16,8 +16,12 @@ public enum MediaCapabilities {
     /// `MediaPlayerEntityFeature`, the bits this app uses.
     private static let pause = 1
     private static let volumeSet = 4
+    private static let volumeMute = 8
     private static let previousTrack = 16
     private static let nextTrack = 32
+    private static let turnOn = 128
+    private static let turnOff = 256
+    private static let volumeStep = 1024
     private static let play = 16384
 
     private static func features(_ state: EntityState?) -> Int {
@@ -26,6 +30,26 @@ public enum MediaCapabilities {
 
     public static func supportsVolume(_ state: EntityState?) -> Bool {
         features(state) & volumeSet != 0
+    }
+
+    public static func supportsMute(_ state: EntityState?) -> Bool {
+        features(state) & volumeMute != 0
+    }
+
+    /// Up/down only — a Roku TV, an Xbox. A player that can set its volume
+    /// outright gets a slider instead, so this is false for it.
+    public static func supportsVolumeStep(_ state: EntityState?) -> Bool {
+        features(state) & volumeStep != 0 && !supportsVolume(state)
+    }
+
+    /// Whether the row's switch can do anything. A cast target that cannot be
+    /// turned off still plays and pauses, but a switch on it would be a lie.
+    public static func supportsPower(_ state: EntityState?) -> Bool {
+        features(state) & (turnOn | turnOff) != 0
+    }
+
+    public static func isMuted(_ state: EntityState?) -> Bool {
+        state?.attributes["is_volume_muted"]?.bool ?? false
     }
 
     public static func supportsPlayPause(_ state: EntityState?) -> Bool {

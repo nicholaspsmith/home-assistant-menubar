@@ -110,6 +110,17 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["my-home", "spa"])
     }
 
+    func testAHiddenNamesakeDoesNotSuffixTheVisibleDashboard() {
+        let settings = Settings(defaults: defaults)
+        settings.visibleDashboardPaths = ["hot-tub"]
+        let listings = DashboardListing.list(from: .array([
+            .object(["url_path": .string("hot-tub"), "title": .string("Hot Tub")]),
+            .object(["url_path": .string("spa-old"), "title": .string("Hot Tub")]),
+        ]))
+        XCTAssertEqual(listings.map(\.title), ["Hot Tub (hot-tub)", "Hot Tub (spa-old)"])
+        XCTAssertEqual(settings.visible(from: listings).map(\.title), ["Hot Tub"])
+    }
+
     func testVisibleFollowsTheChosenOrder() {
         // The window lets rows be dragged, so the stored order is a preference,
         // not an accident of how Home Assistant listed them.

@@ -8,6 +8,26 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.2.0] - 2026-10-05
+
+### Controls that match the device
+
+- Dashboard buttons are buttons. A card that sends a command when tapped — a remote's Back key, "switch to YouTube", a restart — now presses that command instead of showing the entity's on/off switch. The Studio TV remote, fifteen keys on one remote entity, used to collapse into a single "Back" switch.
+- Button cards with no `entity` of their own (the Master TV remote) used to be left out entirely; they now appear.
+- Buttons from one dashboard grid stay together in its columns, so a D-pad reads as a D-pad. Arrows, transport, volume and power show as their glyph; anything else by name.
+- A card that asks for confirmation asks inline: the first press shows **Confirm?**, the second acts.
+- Thermostats show the current reading and what they are doing (Heating, Cooling, Idle), a mode picker (Off / Heat / Cool / Heat·Cool, from the thermostat's own modes) in place of the switch, and the target — or both ends of the heat/cool band — as buttons. Click one, then use the arrows to move it a degree (or the thermostat's own step) at a time. Quick presses go as one change.
+- Shades get open / stop / close instead of a switch, and their position slider stays visible while they are closed.
+- Media players: volume down / mute / up for players that step their volume (Roku, Xbox), mute for players with a volume slider, and no power switch on a player that cannot be turned on or off.
+- `button`, `input_button`, `script` and `scene` entities appear with a Press / Run / Activate button; automations and groups appear with a switch.
+
+### Tidier menu
+
+- Heading cards title the rows after them, so a dashboard's Kitchen / Living Room / Hall sections appear as such instead of one block.
+- Sensors read the way Home Assistant words them: a drive's health is OK, not Off; a backup was 6 h ago, not an ISO timestamp; uptime is 14 d.
+- A dashboard is only suffixed with its URL path when another *visible* dashboard shares its title ("Hot Tub", not "Hot Tub (hot-tub)").
+- A light that has just been switched on no longer shows 1% before it reports its brightness.
+
 ## [1.1.0] - 2026-09-30
 
 ### Sign in with your browser

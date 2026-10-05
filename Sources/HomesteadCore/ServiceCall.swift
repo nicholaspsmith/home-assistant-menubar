@@ -10,27 +10,93 @@ import Foundation
 public struct ServiceCall: Equatable, Sendable {
     public let domain: String
     public let service: String
-    public let entityId: String
+    /// Usually one entity; a dashboard button may target several, or none.
+    public let entityIds: [String]
     public let serviceData: [String: JSONValue]
 
     public init(domain: String, service: String, entityId: String, serviceData: [String: JSONValue]) {
+        self.init(domain: domain, service: service, entityIds: [entityId], serviceData: serviceData)
+    }
+
+    public init(domain: String, service: String, entityIds: [String], serviceData: [String: JSONValue]) {
         self.domain = domain
         self.service = service
-        self.entityId = entityId
+        self.entityIds = entityIds
         self.serviceData = serviceData
     }
+
+    public var entityId: String { entityIds.first ?? "" }
 
     public static func toggle(_ device: Device, on: Bool) -> ServiceCall? {
         switch device.kind {
         case .light, .fan, .toggle, .thermostat, .mediaPlayer:
-            return ServiceCall(domain: device.domain, service: on ? "turn_on" : "turn_off",
+            // A group has no turn_on of its own; the generic one fans out to
+            // its members.
+            let domain = device.domain == "group" ? "homeassistant" : device.domain
+            return ServiceCall(domain: domain, service: on ? "turn_on" : "turn_off",
                                entityId: device.entityId, serviceData: [:])
         case .cover:
             return ServiceCall(domain: "cover", service: on ? "open_cover" : "close_cover",
                                entityId: device.entityId, serviceData: [:])
-        case .sensor:
+        case .sensor, .button:
             return nil
         }
+    }
+
+    /// Press a button row: the card's own call, or the entity's press.
+    public static func press(_ device: Device) -> ServiceCall? {
+        if let action = device.action {
+            return ServiceCall(domain: action.domain, service: action.service,
+                               entityIds: action.entityIds, serviceData: action.data)
+        }
+        switch device.domain {
+        case "button", "input_button":
+            return ServiceCall(domain: device.domain, service: "press", entityId: device.entityId, serviceData: [:])
+        case "script", "scene":
+            return ServiceCall(domain: device.domain, service: "turn_on", entityId: device.entityId, serviceData: [:])
+        default:
+            return nil
+        }
+    }
+
+    /// A cover's three buttons.
+    public enum CoverMotion: Equatable, Sendable {
+        case open, stop, close
+
+        var service: String {
+            switch self {
+            case .open: return "open_cover"
+            case .stop: return "stop_cover"
+            case .close: return "close_cover"
+            }
+        }
+    }
+
+    public static func cover(_ device: Device, _ motion: CoverMotion) -> ServiceCall? {
+        guard case .cover = device.kind else { return nil }
+        return ServiceCall(domain: "cover", service: motion.service, entityId: device.entityId, serviceData: [:])
+    }
+
+    /// Set what a thermostat is working towards: one target, or a heat/cool
+    /// band. Values are sent as given; `ThermostatTargets` has already snapped
+    /// and clamped them.
+    public static func setTargets(_ device: Device, _ targets: ThermostatTargets) -> ServiceCall? {
+        guard device.kind == .thermostat else { return nil }
+        let data: [String: JSONValue]
+        switch targets {
+        case .single(let value):
+            data = ["temperature": .number(value)]
+        case .range(let low, let high):
+            data = ["target_temp_low": .number(low), "target_temp_high": .number(high)]
+        }
+        return ServiceCall(domain: device.domain, service: "set_temperature", entityId: device.entityId,
+                           serviceData: data)
+    }
+
+    public static func setHVACMode(_ device: Device, _ mode: String) -> ServiceCall? {
+        guard device.kind == .thermostat, device.domain == "climate" else { return nil }
+        return ServiceCall(domain: "climate", service: "set_hvac_mode", entityId: device.entityId,
+                           serviceData: ["hvac_mode": .string(mode)])
     }
 
     /// - Parameter state: the device's current state, for attributes the call
@@ -52,12 +118,7 @@ public struct ServiceCall: Equatable, Sendable {
         case .mediaPlayer:
             return ServiceCall(domain: "media_player", service: "volume_set", entityId: device.entityId,
                                serviceData: ["volume_level": .number(min(max(fraction, 0), 1))])
-        case .thermostat:
-            // climate and water_heater take the same call under their own names.
-            let range = TemperatureRange(state: state)
-            return ServiceCall(domain: device.domain, service: "set_temperature", entityId: device.entityId,
-                               serviceData: ["temperature": .number(range.temperature(at: fraction))])
-        case .toggle, .sensor:
+        case .thermostat, .toggle, .sensor, .button:
             return nil
         }
     }
@@ -76,20 +137,32 @@ public struct ServiceCall: Equatable, Sendable {
         case playPause
         case previous
         case next
+        case volumeDown
+        case volumeUp
+        /// Mute, or unmute: the value to set, not a toggle — HA has no toggle.
+        case mute(Bool)
 
         var service: String {
             switch self {
             case .playPause: return "media_play_pause"
             case .previous: return "media_previous_track"
             case .next: return "media_next_track"
+            case .volumeDown: return "volume_down"
+            case .volumeUp: return "volume_up"
+            case .mute: return "volume_mute"
             }
+        }
+
+        var data: [String: JSONValue] {
+            guard case .mute(let muted) = self else { return [:] }
+            return ["is_volume_muted": .bool(muted)]
         }
     }
 
     public static func transport(_ device: Device, _ control: Transport) -> ServiceCall? {
         guard device.kind == .mediaPlayer else { return nil }
         return ServiceCall(domain: "media_player", service: control.service,
-                           entityId: device.entityId, serviceData: [:])
+                           entityId: device.entityId, serviceData: control.data)
     }
 
     /// Move a light along the warm-to-daylight white scale. Kelvin, not mireds:
@@ -107,8 +180,12 @@ public struct ServiceCall: Equatable, Sendable {
             "type": .string("call_service"),
             "domain": .string(domain),
             "service": .string(service),
-            "target": .object(["entity_id": .string(entityId)]),
         ]
+        switch entityIds.count {
+        case 0: break
+        case 1: payload["target"] = .object(["entity_id": .string(entityIds[0])])
+        default: payload["target"] = .object(["entity_id": .array(entityIds.map { .string($0) })])
+        }
         if !serviceData.isEmpty { payload["service_data"] = .object(serviceData) }
         return payload
     }

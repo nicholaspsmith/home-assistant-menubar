@@ -244,6 +244,28 @@ final class AppModel {
         Task { await perform(call, revertEntity: nil) }
     }
 
+    func press(_ device: Device) {
+        guard let call = ServiceCall.press(device) else { return }
+        Task { await perform(call, revertEntity: nil) }
+    }
+
+    func moveCover(_ device: Device, _ motion: ServiceCall.CoverMotion) {
+        guard let call = ServiceCall.cover(device, motion) else { return }
+        Task { await perform(call, revertEntity: nil) }
+    }
+
+    /// The target row collects arrow presses before calling this, so there is
+    /// nothing to coalesce here.
+    func setTargets(_ device: Device, _ targets: ThermostatTargets) {
+        guard let call = ServiceCall.setTargets(device, targets) else { return }
+        Task { await perform(call, revertEntity: device.entityId) }
+    }
+
+    func setHVACMode(_ device: Device, _ mode: String) {
+        guard let call = ServiceCall.setHVACMode(device, mode) else { return }
+        Task { await perform(call, revertEntity: device.entityId) }
+    }
+
     /// Warmth, driven from a slider, so coalesced like the others.
     func setColorTemperature(_ device: Device, fraction: Double) {
         let kelvin = ColorTemperatureRange(state: store[device.entityId]).kelvin(at: fraction)

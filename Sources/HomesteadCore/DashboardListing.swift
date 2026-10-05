@@ -13,10 +13,13 @@ public struct DashboardListing: Equatable, Sendable {
     /// What the picker shows — the dashboard's title, suffixed with its
     /// url_path when another dashboard shares that title.
     public let title: String
+    /// The title as Home Assistant has it, before any suffix.
+    public let name: String
 
-    public init(urlPath: String?, title: String) {
+    public init(urlPath: String?, title: String, name: String? = nil) {
         self.urlPath = urlPath
         self.title = title
+        self.name = name ?? title
     }
 
     /// Build the picker's list from a `lovelace/dashboards/list` result.
@@ -32,12 +35,19 @@ public struct DashboardListing: Equatable, Sendable {
             return (urlPath, title)
         }
 
-        var counts: [String: Int] = [:]
-        for entry in entries { counts[entry.title, default: 0] += 1 }
+        return disambiguated(entries.map { DashboardListing(urlPath: $0.path, title: $0.title) })
+    }
 
-        return entries.map { entry in
-            let title = (counts[entry.title] ?? 0) > 1 ? "\(entry.title) (\(entry.path))" : entry.title
-            return DashboardListing(urlPath: entry.path, title: title)
+    /// Suffix the url_path onto titles that clash *within this list*. A
+    /// hidden dashboard that shares a title should not put "(hot-tub)" after
+    /// the one the menu does show.
+    public static func disambiguated(_ listings: [DashboardListing]) -> [DashboardListing] {
+        var counts: [String: Int] = [:]
+        for listing in listings { counts[listing.name, default: 0] += 1 }
+        return listings.map { listing in
+            let clashes = (counts[listing.name] ?? 0) > 1
+            let title = clashes ? "\(listing.name) (\(listing.urlPath ?? ""))" : listing.name
+            return DashboardListing(urlPath: listing.urlPath, title: title, name: listing.name)
         }
     }
 }
