@@ -333,8 +333,37 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// the menu is on screen.
     func rebuildIfOpen() {
         guard let menu, !menu.items.isEmpty else { return }
+        // Settings ▸ is open (it is the highlighted row): replacing it would
+        // close the submenu under the pointer, e.g. right after Show Sensors
+        // is ticked there. Rebuild only the rows above it.
+        if let open = menu.highlightedItem, open.submenu != nil,
+           let foot = Self.footerStart(of: menu), menu.index(of: open) >= foot {
+            rebuildBody(of: menu)
+            return
+        }
         menu.removeAllItems()
         build(menu)
+    }
+
+    /// Rebuilds everything above Settings ▸ in place and leaves Settings and
+    /// Quit untouched.
+    private func rebuildBody(of live: NSMenu) {
+        guard let liveFoot = Self.footerStart(of: live) else { return }
+        let scratch = NSMenu()
+        build(scratch)
+        menu = live
+        guard let newFoot = Self.footerStart(of: scratch) else { return }
+        for _ in 0..<liveFoot { live.removeItem(at: 0) }
+        let body = Array(scratch.items[..<newFoot])
+        body.forEach(scratch.removeItem)
+        for (index, item) in body.enumerated() { live.insertItem(item, at: index) }
+    }
+
+    /// Index where the footer (separator, Settings ▸, Quit) begins.
+    private static func footerStart(of menu: NSMenu) -> Int? {
+        guard let settings = menu.items.lastIndex(where: { $0.submenu != nil && $0.title == "Settings" })
+        else { return nil }
+        return settings > 0 && menu.items[settings - 1].isSeparatorItem ? settings - 1 : settings
     }
 
     private static func warmthFraction(state: EntityState?) -> Double {

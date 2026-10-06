@@ -127,10 +127,11 @@ final class App: NSObject, NSApplicationDelegate {
 
     /// Homestead's own settings, top of the Settings submenu.
     private func addSettingsItems(to menu: NSMenu) {
-        let sensors = NSMenuItem(title: "Show Sensors", action: #selector(toggleSensors), keyEquivalent: "")
-        sensors.target = self
-        sensors.state = settings.showSensors ? .on : .off
-        menu.addItem(sensors)
+        // Keeps the menu open; the sensor rows above appear or go at once
+        // (the snapshot change rebuilds the rows above Settings ▸).
+        menu.addItem(ToggleMenuItem.make(title: "Show Sensors", isOn: settings.showSensors) { [weak self] on in
+            self?.model.setShowSensors(on)
+        })
 
         if let weather = weatherMenuItem() { menu.addItem(weather) }
 
@@ -184,11 +185,6 @@ final class App: NSObject, NSApplicationDelegate {
 
     @objc private func chooseWeather(_ sender: NSMenuItem) {
         model.setWeatherEntity(sender.representedObject as? String)
-    }
-
-    @objc private func toggleSensors() {
-        model.setShowSensors(!settings.showSensors)
-        menuController.rebuildIfOpen()
     }
 
     @objc func openConnection() {

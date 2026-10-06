@@ -8,6 +8,10 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.6.2] - 2026-10-06
+
+- Ticking a checkbox in the menu no longer closes it: Settings ▸ Show Sensors stays open, and the sensor rows appear or go above it at once
+
 ## [1.6.1] - 2026-10-05
 
 - New app icon: Gertie as she looks in the menu bar
