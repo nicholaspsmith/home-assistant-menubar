@@ -138,7 +138,7 @@ below is in the Settings submenu, which StatusItemKit's `SettingsMenu` builds
 
 | Item | Does |
 |---|---|
-| **Show Sensors** | Shows `sensor` and `binary_sensor` rows |
+| **Show Sensors** | Shows `sensor` and `binary_sensor` rows; the menu stays open, so the rows appear as you tick it |
 | **Weather ▸** | Weather entity for the icon: Automatic (prefers `weather.forecast_home`), a specific entity, or None. Absent when HA has no weather entity |
 | **Dashboards…** | Which dashboards the picker offers, and their order |
 | **Connection…** | Server address, sign in / sign out (shown when signed in) |
