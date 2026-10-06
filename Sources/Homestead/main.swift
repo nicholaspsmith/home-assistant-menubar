@@ -78,7 +78,7 @@ final class App: NSObject, NSApplicationDelegate {
         model = AppModel(settings: settings)
         menuController = MenuController(
             model: model,
-            addSettingsItems: { [weak self] menu in self?.addSettingsItems(to: menu) },
+            addFooter: { [weak self] menu in self?.addFooter(to: menu) },
             onOpenConnection: { [weak self] in self?.openConnection() }
         )
         model.onSnapshotChange = { [weak self] _ in
@@ -117,19 +117,24 @@ final class App: NSObject, NSApplicationDelegate {
         menuController.build(menu)
     }
 
-    func addSettingsItems(to menu: NSMenu) {
+    /// The foot of the menu: Settings ▸ (this app's preferences, then the
+    /// shared Icon ▸, Start at Login and Version), then Quit.
+    func addFooter(to menu: NSMenu) {
+        SettingsMenu.addFooter(to: menu, appName: "Homestead", items: { submenu in
+            addSettingsItems(to: submenu)
+        }, appearance: appearanceMenu, startAtLogin: true)
+    }
+
+    /// Homestead's own settings, top of the Settings submenu.
+    private func addSettingsItems(to menu: NSMenu) {
         let sensors = NSMenuItem(title: "Show Sensors", action: #selector(toggleSensors), keyEquivalent: "")
         sensors.target = self
         sensors.state = settings.showSensors ? .on : .off
         menu.addItem(sensors)
 
-        let login = NSMenuItem(title: "Start at Login", action: #selector(toggleLogin), keyEquivalent: "")
-        login.target = self
-        login.state = LoginItem.isEnabled ? .on : .off
-        menu.addItem(login)
-
-        menu.addItem(appearanceMenu.menuItem())
         if let weather = weatherMenuItem() { menu.addItem(weather) }
+
+        menu.addItem(.separator())
 
         let dashboards = NSMenuItem(title: "Dashboards…", action: #selector(openDashboards), keyEquivalent: "")
         dashboards.target = self
@@ -142,11 +147,6 @@ final class App: NSObject, NSApplicationDelegate {
             connection.target = self
             menu.addItem(connection)
         }
-
-        menu.addItem(.separator())
-        menu.addItem(AppVersion.menuItem())
-        menu.addItem(NSMenuItem(title: "Quit Homestead",
-                                action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
     /// Weather ▸ Automatic, each weather entity, None. Absent when Home
@@ -189,10 +189,6 @@ final class App: NSObject, NSApplicationDelegate {
     @objc private func toggleSensors() {
         model.setShowSensors(!settings.showSensors)
         menuController.rebuildIfOpen()
-    }
-
-    @objc private func toggleLogin() {
-        LoginItem.toggle()
     }
 
     @objc func openConnection() {

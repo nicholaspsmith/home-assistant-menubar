@@ -17,7 +17,8 @@ import HomesteadCore
 @MainActor
 final class MenuController: NSObject, NSWindowDelegate {
     private let model: AppModel
-    private let addSettingsItems: (NSMenu) -> Void
+    /// Appends Settings ▸ and Quit.
+    private let addFooter: (NSMenu) -> Void
     private let onOpenConnection: () -> Void
 
     private weak var menu: NSMenu?
@@ -32,10 +33,10 @@ final class MenuController: NSObject, NSWindowDelegate {
     private var colorTarget: Device?
 
     init(model: AppModel,
-         addSettingsItems: @escaping (NSMenu) -> Void,
+         addFooter: @escaping (NSMenu) -> Void,
          onOpenConnection: @escaping () -> Void) {
         self.model = model
-        self.addSettingsItems = addSettingsItems
+        self.addFooter = addFooter
         self.onOpenConnection = onOpenConnection
         super.init()
     }
@@ -56,7 +57,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         if snapshot.connection == .unconfigured {
             menu.addItem(connectItem())
             menu.addItem(.separator())
-            addSettingsItems(menu)
+            addFooter(menu)
             return
         }
 
@@ -96,7 +97,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         }
 
         menu.addItem(.separator())
-        addSettingsItems(menu)
+        addFooter(menu)
     }
 
     /// Adds a menu item showing `view`, kept current from `entityId`'s state:
@@ -410,14 +411,14 @@ final class MenuController: NSObject, NSWindowDelegate {
                        blue: Int((rgb.blueComponent * 255).rounded()))
     }
 
-    /// Whether the settings section offers Connection…: only when signed in,
+    /// Whether Settings ▸ offers Connection…: only when signed in,
     /// because signed out the menu already leads with Connect to Home Assistant….
     static func showsConnectionItem(_ connection: ConnectionState) -> Bool {
         connection != .unconfigured && connection != .authFailed
     }
 
     /// The one way in while signed out. Signed in, the same window is
-    /// Connection… in the settings section instead (see `showsConnectionItem`).
+    /// Settings ▸ Connection… instead (see `showsConnectionItem`).
     private func connectItem() -> NSMenuItem {
         let connect = NSMenuItem(title: "Connect to Home Assistant…",
                                  action: #selector(openConnection), keyEquivalent: "")
