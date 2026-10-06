@@ -8,6 +8,10 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.6.0] - 2026-10-05
+
+- The menu ends with a **Settings** submenu, the same one every Menumon app now has: Show Sensors, Weather, Dashboards… and Connection… moved there, along with Icon, Start at Login and the version. The dashboard picker and your devices stay at the top
+
 ## [1.5.0] - 2026-10-05
 
 - The weather around the house moves, gently and all the time: the sun gleams and slowly turns, the moon glows while a star twinkles, clouds drift or pass behind the roof, rain and snow fall beside the walls, fog banks slide, gusts blow out and fade, and a thunderstorm's bolt flickers every so often. The windows stay clear, and the sky holds still under Reduce Motion

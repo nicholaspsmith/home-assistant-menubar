@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
 
-**Version 1.5.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.6.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -47,7 +47,7 @@ Carol (SoundChain), Iguanamous (VPN & DNS), Armonitor (Monitor Lizard), Volta
 then Gertie, counting only the ones that are running. Skipped when Reduce
 Motion is on.
 
-**Icon ▸ Dot** replaces the cottage with a plain dot; **Icon ▸ House** restores it.
+**Settings ▸ Icon ▸ Dot** replaces the cottage with a plain dot; **Settings ▸ Icon ▸ House** restores it.
 
 ## Requirements
 
@@ -70,7 +70,7 @@ app.
 ## First run
 
 1. Choose **Connect to Home Assistant…** (the only way in while signed out;
-   once signed in it is **Connection…**, near the bottom of the menu). A server
+   once signed in it is **Settings ▸ Connection…**). A server
    that announces itself over Bonjour (`_home-assistant._tcp`) is filled in;
    otherwise enter its address, e.g. `http://homeassistant.local:8123`.
 2. **Sign In with Browser** opens Home Assistant's login page. Log in; the tab
@@ -78,14 +78,14 @@ app.
    if you close the Connection window. **Reopen Login Page** shows the same page
    again; a tab from an earlier attempt is rejected without cancelling the
    current one.
-3. Optional: **Dashboards…** chooses which dashboards the picker offers and in
+3. Optional: **Settings ▸ Dashboards…** chooses which dashboards the picker offers and in
    what order (drag to reorder).
 
 ### Sign-in and tokens
 
 Sign-in returns a 30-minute access token and a refresh token; Homestead uses
 the refresh token to get a new access token on each reconnect. Both are stored
-in the login Keychain. **Sign Out** (in **Connection…**) deletes them and
+in the login Keychain. **Sign Out** (in **Settings ▸ Connection…**) deletes them and
 revokes the refresh token on the server; you can also revoke it in Home
 Assistant under your profile ▸ Security ▸ Refresh tokens. A long-lived token
 stored by an older version keeps working until you sign in again.
@@ -125,20 +125,26 @@ that entity's normal row.
 | `cover` | Open/Closed/Opening, position | open / stop / close, position slider where supported (shown even while closed) |
 | `climate`, `water_heater` | reading · current action (Heating, Cooling, Idle) | mode picker from the entity's `hvac_modes` (in place of the switch); the target, or both ends of a heat/cool range, as buttons: click one, then ▲▼ step it |
 | `media_player` | what's playing, or the source | power, volume slider or volume ▼ mute ▲, ⏮ ⏯ ⏭ — each only if the player supports it |
-| `sensor`, `binary_sensor` | value worded as HA does (OK/Problem, 6 h ago, 14 d) | read-only; hidden unless **Show Sensors** is ticked |
+| `sensor`, `binary_sensor` | value worded as HA does (OK/Problem, 6 h ago, 14 d) | read-only; hidden unless **Settings ▸ Show Sensors** is ticked |
 
 Anything else (to-do lists, cameras, weather cards) is skipped.
 
-### Settings items
+### Settings ▸
+
+The menu ends with **Settings ▸** and **Quit Homestead** (⌘Q). The dashboard
+picker, status rows and device controls stay at the top level; everything
+below is in the Settings submenu, which StatusItemKit's `SettingsMenu` builds
+(Homestead supplies the first two groups).
 
 | Item | Does |
 |---|---|
 | **Show Sensors** | Shows `sensor` and `binary_sensor` rows |
-| **Start at Login** | Registers the app with `SMAppService` |
-| **Icon ▸** | House or Dot |
 | **Weather ▸** | Weather entity for the icon: Automatic (prefers `weather.forecast_home`), a specific entity, or None. Absent when HA has no weather entity |
 | **Dashboards…** | Which dashboards the picker offers, and their order |
 | **Connection…** | Server address, sign in / sign out (shown when signed in) |
+| **Icon ▸** | House or Dot |
+| **Start at Login** | Registers the app with `SMAppService` |
+| **Version x.y.z** | The running build (grey) |
 
 ## Development
 
@@ -183,7 +189,7 @@ The token then lives at `~/Library/Application Support/Homestead/ha-token`
 (mode `0600`) and is moved out of the Keychain on the next launch. **This is
 weaker**: the file is readable by anything running as you and is backed up as
 plaintext, so the setting is off by default and not in the UI. To return to the
-Keychain, set it to `false` and sign in again in **Connection…**.
+Keychain, set it to `false` and sign in again in **Settings ▸ Connection…**.
 
 ### Implementation notes
 
