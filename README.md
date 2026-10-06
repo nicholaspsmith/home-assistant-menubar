@@ -1,6 +1,6 @@
 # Homestead
 
-<p align="center"><img src="docs/mascot.png" width="160" alt="Homestead's mascot, a house with lit windows for eyes"></p>
+<p align="center"><img src="docs/mascot.png" width="160" alt="Gertie, Homestead's menu-bar character, on its app icon"></p>
 
 <p align="center">Part of <strong><a href="https://menumon.nicksmith.software">Menumon</a></strong>.</p>
 
@@ -151,8 +151,8 @@ below is in the Settings submenu, which StatusItemKit's `SettingsMenu` builds
 ```bash
 swift test                    # the HomesteadCore test suite
 ./scripts/build-app.sh        # build build/Homestead.app
-./art/render-art.sh           # redraw docs/menubar-icon.png; copy the mascot from the site repo
-python3 art/gen_app_icon.py   # regenerate the app icon (Gemini) and rebuild the .icns
+./art/render-art.sh           # redraw docs/menubar-icon.png
+./scripts/make-icon.sh        # redraw the app icon and docs/mascot.png
 ```
 
 - `HomesteadCore` holds everything testable without a screen: the WebSocket
@@ -163,11 +163,11 @@ python3 art/gen_app_icon.py   # regenerate the app icon (Gemini) and rebuild the
 - The menu-bar glyph is drawn in code (`CharacterIcon` in StatusItemKit, used
   by `HouseIcon.swift`) because it changes with live state.
   `art/render-art.sh` renders the README strip from that same code.
-- The app icon comes from `art/gen_app_icon.py`: Gemini
-  (`gemini-2.5-flash-image`) paints it, and the script masks it to the macOS
-  tile shape and builds `Resources/bundle/AppIcon.icns`. The mascot comes from
-  the Menumon site's pipeline
-  (`widgets.nicksmith.software/art/gen_icons.py homestead`).
+- The app icon (`Resources/bundle/AppIcon.icns`) and `docs/mascot.png` are
+  the same house, drawn by the same `CharacterIcon` code, large on a dark
+  macOS tile. `scripts/make-icon.sh` runs the Menumon site's renderer
+  (`widgets.nicksmith.software/art/glyphs/app-icons.sh homestead`), which
+  draws every Menumon app's icon this way.
 - Logs use subsystem `com.nicholaspsmith.Homestead`. Dashboard titles and
   entity ids are logged `.private`; counts are public.
 

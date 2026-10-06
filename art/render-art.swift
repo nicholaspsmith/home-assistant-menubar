@@ -7,8 +7,7 @@
 // Draws the menu-bar glyph's states strip (docs/menubar-icon.png) from the real
 // CharacterIcon, so the README always shows what the app actually draws.
 //
-// The app icon and the mascot are not drawn here: they are generated art, from
-// art/gen_app_icon.py and the Menumon site's mascot pipeline respectively.
+// The app icon and docs/mascot.png are drawn by scripts/make-icon.sh.
 //
 // Run from the repo root: art/render-art.sh
 import AppKit

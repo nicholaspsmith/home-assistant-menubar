@@ -8,6 +8,10 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.6.1] - 2026-10-05
+
+- New app icon: Gertie as she looks in the menu bar
+
 ## [1.6.0] - 2026-10-05
 
 - The menu ends with a **Settings** submenu, the same one every Menumon app now has: Show Sensors, Weather, Dashboards… and Connection… moved there, along with Icon, Start at Login and the version. The dashboard picker and your devices stay at the top
