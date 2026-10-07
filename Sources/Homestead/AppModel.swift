@@ -497,12 +497,21 @@ final class AppModel {
         }
     }
 
+    /// Bumped by every dashboard load. A load that finds a newer one started
+    /// while it awaited Home Assistant stops, so a slow reply for a dashboard
+    /// you've already switched away from can't replace the newer one's rows
+    /// (the picker would say one dashboard while showing another's devices).
+    private var loadGeneration = 0
+
     private func loadDashboard(_ dashboard: DashboardListing) async throws {
         guard let client else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
         var payload: [String: JSONValue] = ["type": .string("lovelace/config")]
         if let urlPath = dashboard.urlPath { payload["url_path"] = .string(urlPath) }
 
         let config = try await client.send(payload)
+        guard generation == loadGeneration else { return }
         refs = DashboardParser.references(in: config)
         awaitingFirstSnapshot = true
 
@@ -517,12 +526,21 @@ final class AppModel {
             update { $0.groups = [] }
             return
         }
-        subscriptionId = try await client.subscribe([
+        let subscription = try await client.subscribe([
             "type": .string("subscribe_entities"),
             "entity_ids": .array(ids.map { .string($0) }),
         ], onEvent: { [weak self] event in
-            Task { @MainActor in self?.applyEvent(event) }
+            Task { @MainActor in
+                // Events from a superseded dashboard's subscription are dropped.
+                guard let self, generation == self.loadGeneration else { return }
+                self.applyEvent(event)
+            }
         })
+        guard generation == loadGeneration else {
+            await client.unsubscribe(subscription)
+            return
+        }
+        subscriptionId = subscription
     }
 
     private func applyEvent(_ event: JSONValue) {
