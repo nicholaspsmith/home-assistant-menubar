@@ -8,6 +8,10 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.6.3] - 2026-10-06
+
+- Switching dashboards always shows the dashboard you picked: a slow reply for one you'd already switched away from could replace its devices, so the picker said one dashboard while the menu showed another's
+
 ## [1.6.2] - 2026-10-06
 
 - Ticking a checkbox in the menu no longer closes it: Settings ▸ Show Sensors stays open, and the sensor rows appear or go above it at once
