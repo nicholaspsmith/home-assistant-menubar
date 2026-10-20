@@ -208,8 +208,18 @@ final class MenuController: NSObject, NSWindowDelegate {
             // A shade's position is worth setting while it is closed — that is
             // how you open it half-way — so its slider never hides.
             let hidden: (EntityState?) -> Bool = device.kind == .light || device.kind == .fan ? Self.isOff : { _ in false }
+            // A cover moves once, to where the slider is let go; the row
+            // shows the position as it is dragged.
+            let commitsOnRelease = !device.kind.sendsLevelWhileDragging
             let slider = LevelSliderView(style: .level(device.kind),
-                                         fraction: Self.fraction(device: device, state: state)) { [weak self] value in
+                                         fraction: Self.fraction(device: device, state: state),
+                                         commitsOnRelease: commitsOnRelease,
+                                         onPreview: commitsOnRelease ? { [weak self, weak row] value in
+                                             guard var state = self?.model.state(for: device.entityId) else { return }
+                                             state.attributes["current_position"] =
+                                                 .number(Double(LevelMath.coverPosition(from: value)))
+                                             row?.update(state: state)
+                                         } : nil) { [weak self] value in
                 self?.model.setLevel(device, fraction: value)
             }
             addItem(slider, to: menu, entityId: device.entityId, state: state, hidden: hidden) { state in

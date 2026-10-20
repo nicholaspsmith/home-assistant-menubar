@@ -214,6 +214,11 @@ Keychain, set it to `false` and sign in again in **Settings ▸ Connection…**.
   key events to itself.
 - **Drags are coalesced.** One service call per entity is in flight at a time,
   with only the newest value queued behind it.
+- **A cover's slider sends once, when it is let go.** The row shows the
+  position while dragging, but a motorised shade fed a stream of
+  `set_cover_position` calls can jitter on its own until it is stopped. The
+  slider's `mouseDown` returns only at mouse-up, menu or not, so that is
+  where the call is made.
 - **The token file is created `0600` in one step**, not written and then
   chmod-ed, so it is never briefly readable by other accounts.
 

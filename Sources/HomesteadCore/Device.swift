@@ -51,6 +51,20 @@ public enum DeviceKind: Equatable, Sendable {
     }
 }
 
+extension DeviceKind {
+    /// Whether a slider drag sends the level as it moves, or once, when the
+    /// slider is let go. A bulb or fan follows a stream of calls happily; a
+    /// motorised cover does not — a burst of `set_cover_position` left a
+    /// Zigbee shade's controller jittering on its own, deaf to its buttons,
+    /// until it was sent a stop.
+    public var sendsLevelWhileDragging: Bool {
+        switch self {
+        case .cover: return false
+        case .light, .fan, .mediaPlayer, .thermostat, .toggle, .sensor, .button, .lock, .select: return true
+        }
+    }
+}
+
 public struct Device: Equatable, Sendable {
     public let entityId: String
     public let displayName: String
