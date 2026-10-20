@@ -11,7 +11,7 @@
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
 speed, blind position and target temperature, a colour picker for colour bulbs,
-and transport controls for media players. Using a control does not close the
+transport controls for media players, lock buttons and option lists. Using a control does not close the
 menu.
 
 <p align="center"><img src="docs/menubar-icon.png" width="440" alt="The menu-bar glyph: a cottage with dark windows, one window lit, both lit, a fan turning in one, and hollow when unreachable"></p>
@@ -120,7 +120,9 @@ that entity's normal row.
 |---|---|---|
 | `light` | brightness % | switch, brightness slider, warmth slider in kelvin (tunable white), colour swatch opening the system picker (colour bulbs, once on and reporting a colour) |
 | `switch`, `input_boolean`, `remote`, `automation`, `group` | — | switch |
-| `button`, `input_button`, `script`, `scene` | — | Press / Run / Activate |
+| `button`, `input_button`, `script`, `scene` | — | Press / Run / Activate; a script with input fields shows **Run…**, which closes the menu and opens a small form for them (text, password, choice, number, checkbox), then runs it with what you entered |
+| `lock` | Locked/Unlocked/Locking/Unlocking/Jammed/Open | one button that does the opposite: **Lock**, or **Unlock**, which asks inline first (**Confirm?**, then a second press); off while the lock is moving |
+| `input_select`, `select` | — | the current option as a button: click it to expand the options under the row, click one to choose it |
 | `fan` | speed % | switch, speed slider snapped to the fan's own step |
 | `cover` | Open/Closed/Opening, position | open / stop / close, position slider where supported (shown even while closed) |
 | `climate`, `water_heater` | reading · current action (Heating, Cooling, Idle) | mode picker from the entity's `hvac_modes` (in place of the switch); the target, or both ends of a heat/cool range, as buttons: click one, then ▲▼ step it |
@@ -196,6 +198,14 @@ Keychain, set it to `false` and sign in again in **Settings ▸ Connection…**.
 - **The dashboard picker expands inside the menu.** An `NSPopUpButton` cannot be
   clicked while a menu is tracking, and a submenu would dismiss the menu on
   selection. View-based rows do neither.
+- **Option lists expand inside the menu too**, for the same reason: an
+  `input_select` or `select` row's options are view-based rows under it.
+- **A script's form is a window.** A tracking menu keeps key events to
+  itself, so nothing in it can be typed into. Which scripts take input comes
+  from `get_services`, read on connect, on a dashboard switch and when a
+  script is re-registered; its fields keep the order the script declares,
+  which is read from the reply's text because a parsed JSON object loses it.
+  What is typed is never logged and is cleared when the window closes.
 - **Sliders show only while a device is on**, except a cover's: setting a
   closed shade to half-way is how you open it half-way.
 - **Thermostat targets are stepped with buttons.** Presses collect briefly and

@@ -29,6 +29,11 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// Whether the dashboard list is showing. Reset whenever the menu closes,
     /// so it always opens on the devices.
     private var pickerExpanded = false
+    /// The select whose options are showing under its row, if any. Reset with
+    /// the picker when the menu closes.
+    private var expandedSelect: String?
+    /// The Run form of a script that asks for input, while it is open.
+    private var scriptForm: ScriptFormWindowController?
     /// The light the shared colour panel is currently driving.
     private var colorTarget: Device?
 
@@ -46,6 +51,7 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// Called when the menu closes, so the next open starts on the devices.
     func menuClosed() {
         pickerExpanded = false
+        expandedSelect = nil
     }
 
     func build(_ menu: NSMenu) {
@@ -81,12 +87,20 @@ final class MenuController: NSObject, NSWindowDelegate {
             var index = group.devices.startIndex
             while index < group.devices.endIndex {
                 let device = group.devices[index]
-                guard device.kind == .button else {
-                    addDevice(device, to: menu, snapshot: snapshot)
+                // A script that opens a form is a row of its own, where its
+                // Run… can say so.
+                guard device.kind == .button, formFields(for: device, snapshot: snapshot) == nil else {
+                    if device.kind == .button {
+                        addButtonRow(device, to: menu, snapshot: snapshot)
+                    } else {
+                        addDevice(device, to: menu, snapshot: snapshot)
+                    }
                     index += 1
                     continue
                 }
-                let run = Array(group.devices[index...].prefix { $0.kind == .button && $0.layout == device.layout })
+                let run = Array(group.devices[index...].prefix {
+                    $0.kind == .button && $0.layout == device.layout && formFields(for: $0, snapshot: snapshot) == nil
+                })
                 index += run.count
                 if run.count == 1 {
                     addButtonRow(device, to: menu, snapshot: snapshot)
@@ -139,6 +153,20 @@ final class MenuController: NSObject, NSWindowDelegate {
             }
             accessory = controls
             updateAccessory = controls.update(state:)
+        case .lock:
+            let button = LockButton(state: state) { [weak self] action in
+                self?.model.lock(device, action)
+            }
+            accessory = button
+            updateAccessory = button.update(state:)
+        case .select:
+            let button = SelectValueButton(state: state, expanded: expandedSelect == device.entityId) { [weak self] in
+                guard let self else { return }
+                self.expandedSelect = self.expandedSelect == device.entityId ? nil : device.entityId
+                self.rebuildIfOpen()
+            }
+            accessory = button
+            updateAccessory = button.update(state:)
         default:
             break
         }
@@ -201,23 +229,57 @@ final class MenuController: NSObject, NSWindowDelegate {
                 warmth.update(fraction: Self.warmthFraction(state: state), caption: Self.warmthCaption(state: state))
             }
 
-        case .toggle, .sensor, .button:
+        case .select:
+            guard expandedSelect == device.entityId else { return }
+            addOptions(of: device, state: state, to: menu)
+
+        case .toggle, .sensor, .button, .lock:
             break
         }
+    }
+
+    /// A select's options, expanded under its row: one view-based row each,
+    /// so choosing one keeps the menu open, then the list folds away.
+    private func addOptions(of device: Device, state: EntityState?, to menu: NSMenu) {
+        for option in SelectOptions.options(of: state) {
+            let item = NSMenuItem()
+            item.view = DashboardRowView(title: option, isCurrent: option == state?.state) { [weak self] in
+                guard let self else { return }
+                self.expandedSelect = nil
+                self.model.selectOption(device, option)
+                self.rebuildIfOpen()
+            }
+            menu.addItem(item)
+        }
+    }
+
+    /// A script's fields when pressing it should open its Run form: an
+    /// entity row (not a dashboard card's own call) for a script that asks
+    /// for input. Nil for everything else.
+    private func formFields(for device: Device, snapshot: Snapshot) -> [ScriptField]? {
+        guard device.action == nil, device.domain == "script",
+              let fields = snapshot.scriptFields[String(device.entityId.dropFirst("script.".count))],
+              !fields.isEmpty else { return nil }
+        return fields
     }
 
     /// One button on its own: a row with its name and a Press button.
     private func addButtonRow(_ device: Device, to menu: NSMenu, snapshot: Snapshot) {
         let state = snapshot.states[device.entityId]
+        let fields = formFields(for: device, snapshot: snapshot)
         let verb: String
         switch device.action?.domain ?? device.domain {
-        case "script": verb = "Run"
+        case "script": verb = fields == nil ? "Run" : "Run…"
         case "scene": verb = "Activate"
         default: verb = "Press"
         }
         let press = PressButton(title: verb, symbol: nil, iconOnly: false,
                                 confirmation: device.action?.confirmation) { [weak self] in
-            self?.model.press(device)
+            if let fields {
+                self?.openForm(for: device, fields: fields)
+            } else {
+                self?.model.press(device)
+            }
         }
         let row = DeviceRowView(device: device, state: state, showsSwitch: false, accessory: press, onToggle: { _ in })
         addItem(row, to: menu, entityId: device.entityId, state: state) { state in
@@ -383,7 +445,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         case .fan: return LevelMath.fraction(percentage: state.attributes["percentage"])
         case .cover: return LevelMath.fraction(percentage: state.attributes["current_position"])
         case .mediaPlayer: return MediaCapabilities.volume(of: state) ?? 0
-        case .thermostat, .toggle, .sensor, .button: return 0
+        case .thermostat, .toggle, .sensor, .button, .lock, .select: return 0
         }
     }
 
@@ -403,6 +465,37 @@ final class MenuController: NSObject, NSWindowDelegate {
         // The devices for the new dashboard arrive with its state; rebuild now
         // so the list collapses immediately rather than at the next event.
         rebuildIfOpen()
+    }
+
+    /// Opens a script's Run form. A menu cannot take typing, so the menu
+    /// closes and the form is a window of its own; the window is opened once
+    /// the menu has gone, so it can become key.
+    private func openForm(for device: Device, fields: [ScriptField]) {
+        menu?.cancelTracking()
+        let objectId = String(device.entityId.dropFirst("script.".count))
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let open = self.scriptForm {
+                if open.objectId == objectId { return open.show() }
+                open.close()
+            }
+            let form = ScriptFormWindowController(
+                objectId: objectId, title: device.displayName, fields: fields,
+                onRun: { [weak self] data in
+                    guard let self else { throw HAClientError.notConnected }
+                    try await self.model.runScript(objectId: objectId, data: data)
+                },
+                // Let go of it after the close has finished, and only if a
+                // newer form has not taken its place.
+                onClose: { [weak self] closed in
+                    DispatchQueue.main.async {
+                        if self?.scriptForm === closed { self?.scriptForm = nil }
+                    }
+                }
+            )
+            self.scriptForm = form
+            form.show()
+        }
     }
 
     @objc private func retry() {

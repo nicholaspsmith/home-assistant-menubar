@@ -21,6 +21,8 @@ public actor HAClient {
     private var nextId = 1
     private var pending: [Int: CheckedContinuation<JSONValue, Error>] = [:]
     private var subscriptions: [Int: @Sendable (JSONValue) -> Void] = [:]
+    /// Commands whose caller wants the reply frame as text (`sendForFrameText`).
+    private var textReplies: Set<Int> = []
     private var readerTask: Task<Void, Never>?
     private var onClose: (@Sendable (String) -> Void)?
 
@@ -78,6 +80,19 @@ public actor HAClient {
         }
     }
 
+    /// Send a command and get its whole `result` frame back as text, for a
+    /// reply whose key order matters: `JSONValue` keeps objects as
+    /// dictionaries, which lose it.
+    public func sendForFrameText(_ payload: [String: JSONValue]) async throws -> String {
+        let id = claimId()
+        textReplies.insert(id)
+        let reply = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<JSONValue, Error>) in
+            pending[id] = continuation
+            Task { await self.write(payload, id: id) }
+        }
+        return reply.string ?? ""
+    }
+
     /// Subscribe; `onEvent` runs for every event frame carrying this id.
     /// - Returns: the subscription id, for `unsubscribe`.
     @discardableResult
@@ -120,6 +135,7 @@ public actor HAClient {
             let text = String(decoding: try JSONValue.object(body).encodedData(), as: UTF8.self)
             try await transport.send(text)
         } catch {
+            textReplies.remove(id)
             resume(id: id, with: .failure(error))
         }
     }
@@ -143,8 +159,9 @@ public actor HAClient {
         guard let message = try? HAMessage.decode(text) else { return }
         switch message {
         case .result(let id, let success, let result, let error):
+            let wantsText = textReplies.remove(id) != nil
             if success {
-                resume(id: id, with: .success(result ?? .null))
+                resume(id: id, with: .success(wantsText ? .string(text) : result ?? .null))
             } else {
                 resume(id: id, with: .failure(HAClientError.command(error ?? HAError(code: "unknown", message: ""))))
             }
@@ -169,6 +186,7 @@ public actor HAClient {
     private func failAllPending(with error: Error) {
         let waiting = pending
         pending.removeAll()
+        textReplies.removeAll()
         for (_, continuation) in waiting { continuation.resume(throwing: error) }
     }
 }

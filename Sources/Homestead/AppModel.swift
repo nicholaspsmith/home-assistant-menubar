@@ -31,6 +31,9 @@ struct Snapshot {
     var weatherEntities: [(id: String, name: String)] = []
     var weatherEntity: String?
     var weather: WeatherReport?
+    /// The scripts that ask for input when run, by object id: their rows
+    /// open a form instead of running straight away.
+    var scriptFields: [String: [ScriptField]] = [:]
 
     var lightsOn: Int {
         groups.flatMap(\.devices)
@@ -85,6 +88,9 @@ final class AppModel {
     private var forecastEntity: String?
     private var forecastSubscriptionId: Int?
     private var hourly: [JSONValue]?
+    /// A pending re-read of the scripts' fields after Home Assistant
+    /// re-registers one (a script reload does), so a burst is read once.
+    private var scriptFieldsReload: Task<Void, Never>?
 
     private(set) var snapshot = Snapshot()
     var onSnapshotChange: ((Snapshot) -> Void)?
@@ -177,7 +183,10 @@ final class AppModel {
     func select(dashboard: DashboardListing) {
         settings.selectedDashboardPath = dashboard.urlPath ?? ""
         update { $0.selected = dashboard }
-        Task { await loadDashboardLoggingErrors(dashboard) }
+        Task {
+            await loadDashboardLoggingErrors(dashboard)
+            await loadScriptFields()
+        }
     }
 
     /// The Dashboards window changed which dashboards are offered.
@@ -273,6 +282,34 @@ final class AppModel {
         Task { await perform(call, revertEntity: nil) }
     }
 
+    /// Lock or unlock — whichever the lock is not. The row asks before an
+    /// unlock; by here it has been confirmed.
+    func lock(_ device: Device, _ action: LockControl.Action) {
+        guard let call = ServiceCall.lock(device, action) else { return }
+        Task { await perform(call, revertEntity: device.entityId) }
+    }
+
+    func selectOption(_ device: Device, _ option: String) {
+        guard let call = ServiceCall.selectOption(device, option) else { return }
+        Task { await perform(call, revertEntity: device.entityId) }
+    }
+
+    /// Runs a script with the values from its form. Throws, rather than
+    /// logging like the menu's controls, so the form can show the failure and
+    /// stay open. Only the script and how many values it was given are
+    /// logged — never the values: one of them can be a door code.
+    func runScript(objectId: String, data: [String: JSONValue]) async throws {
+        guard let client else { throw HAClientError.notConnected }
+        let call = ServiceCall.runScript(objectId: objectId, data: data)
+        do {
+            _ = try await client.send(call.commandPayload)
+            log.info("script.\(objectId, privacy: .private) ran with \(data.count, privacy: .public) fields")
+        } catch {
+            log.error("script.\(objectId, privacy: .private) with \(data.count, privacy: .public) fields failed: \(String(describing: error), privacy: .public)")
+            throw error
+        }
+    }
+
     func moveCover(_ device: Device, _ motion: ServiceCall.CoverMotion) {
         guard let call = ServiceCall.cover(device, motion) else { return }
         Task { await perform(call, revertEntity: nil) }
@@ -345,6 +382,8 @@ final class AppModel {
                 await loadTemperatureUnit()
                 await loadWeather()
                 try await loadDashboards()
+                await loadScriptFields()
+                await watchScriptServices()
             } catch HAClientError.authInvalid {
                 update { $0.connection = .authFailed }
             } catch {
@@ -360,6 +399,53 @@ final class AppModel {
               let unit = config["unit_system"]?["temperature"]?.string
         else { return }
         update { $0.temperatureUnit = unit }
+    }
+
+    // MARK: - Script fields
+
+    /// Which scripts take input, from `get_services` — every service in the
+    /// house, so it is read on connect, on a dashboard switch, and when a
+    /// script is re-registered, not on every state change.
+    private func loadScriptFields() async {
+        guard let client else { return }
+        do {
+            let frame = try await client.sendForFrameText(["type": .string("get_services")])
+            guard self.client === client else { return }
+            let fields = ScriptFields.parse(servicesFrame: frame)
+            log.info("scripts with fields: \(fields.count, privacy: .public)")
+            guard fields != snapshot.scriptFields else { return }
+            update { $0.scriptFields = fields }
+        } catch {
+            log.error("get_services failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// Reloading scripts re-registers their services, so a field added in
+    /// Home Assistant reaches the menu without a reconnect.
+    private func watchScriptServices() async {
+        guard let client else { return }
+        for type in ["service_registered", "service_removed"] {
+            do {
+                try await client.subscribe([
+                    "type": .string("subscribe_events"),
+                    "event_type": .string(type),
+                ], onEvent: { [weak self] event in
+                    guard event["data"]?["domain"]?.string == "script" else { return }
+                    Task { @MainActor in self?.scheduleScriptFieldsReload() }
+                })
+            } catch {
+                log.info("\(type, privacy: .public) subscription failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    private func scheduleScriptFieldsReload() {
+        scriptFieldsReload?.cancel()
+        scriptFieldsReload = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.loadScriptFields()
+        }
     }
 
     // MARK: - Weather

@@ -23,6 +23,11 @@ public enum DeviceKind: Equatable, Sendable {
     /// Something you press rather than switch: a `button`/`input_button`
     /// entity, a script or scene, or a dashboard card that calls a service.
     case button
+    /// A `lock`: its state, and one button that does the opposite.
+    case lock
+    /// An `input_select` or `select`: the current option, and the list of
+    /// the others to choose from.
+    case select
 
     /// Whether the row's trailing control is an on/off switch. A cover gets
     /// open/stop/close instead (a blind half-way is neither), and a thermostat
@@ -30,7 +35,7 @@ public enum DeviceKind: Equatable, Sendable {
     public var hasSwitch: Bool {
         switch self {
         case .light, .fan, .toggle, .mediaPlayer, .thermostat: return true
-        case .cover, .sensor, .button: return false
+        case .cover, .sensor, .button, .lock, .select: return false
         }
     }
 
@@ -41,7 +46,7 @@ public enum DeviceKind: Equatable, Sendable {
         // A player's volume slider depends on supported_features, so the menu
         // adds it from the entity's state rather than from the kind alone; a
         // thermostat has its own target row.
-        case .mediaPlayer, .thermostat, .toggle, .sensor, .button: return false
+        case .mediaPlayer, .thermostat, .toggle, .sensor, .button, .lock, .select: return false
         }
     }
 }
@@ -130,6 +135,8 @@ public enum DeviceCatalog {
             return .cover(positionable: features & coverSetPosition != 0)
         case "climate", "water_heater": return .thermostat
         case "sensor", "binary_sensor": return .sensor
+        case "lock": return .lock
+        case "input_select", "select": return .select
         default: return nil
         }
     }

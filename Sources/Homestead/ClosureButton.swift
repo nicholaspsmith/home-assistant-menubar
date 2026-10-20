@@ -42,8 +42,8 @@ class ClosureButton: NSButton {
 /// restart. When the dashboard card asks for confirmation, the first press
 /// arms the button ("Confirm?", in red) and only a second press within a few
 /// seconds acts: an alert would take the menu down with it.
-final class PressButton: ClosureButton {
-    private let confirmation: String?
+class PressButton: ClosureButton {
+    private var confirmation: String?
     private var armed = false
     private var disarm: DispatchWorkItem?
     private var restingTitle = ""
@@ -68,6 +68,17 @@ final class PressButton: ClosureButton {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// Changes what the button does next — a lock's Lock becoming Unlock —
+    /// disarming it first, so a Confirm? showing for the old action cannot
+    /// confirm the new one.
+    func retitle(_ newTitle: String, confirmation newConfirmation: String?) {
+        reset()
+        confirmation = newConfirmation
+        title = newTitle
+        toolTip = newConfirmation ?? newTitle
+        setAccessibilityLabel(newTitle)
+    }
 
     private func handlePress() {
         guard confirmation != nil, !armed else {

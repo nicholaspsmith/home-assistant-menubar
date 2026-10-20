@@ -38,7 +38,7 @@ public struct ServiceCall: Equatable, Sendable {
         case .cover:
             return ServiceCall(domain: "cover", service: on ? "open_cover" : "close_cover",
                                entityId: device.entityId, serviceData: [:])
-        case .sensor, .button:
+        case .sensor, .button, .lock, .select:
             return nil
         }
     }
@@ -118,7 +118,7 @@ public struct ServiceCall: Equatable, Sendable {
         case .mediaPlayer:
             return ServiceCall(domain: "media_player", service: "volume_set", entityId: device.entityId,
                                serviceData: ["volume_level": .number(min(max(fraction, 0), 1))])
-        case .thermostat, .toggle, .sensor, .button:
+        case .thermostat, .toggle, .sensor, .button, .lock, .select:
             return nil
         }
     }
@@ -172,6 +172,28 @@ public struct ServiceCall: Equatable, Sendable {
         guard device.kind == .light else { return nil }
         return ServiceCall(domain: "light", service: "turn_on", entityId: device.entityId,
                            serviceData: ["color_temp_kelvin": .number(kelvin.rounded())])
+    }
+
+    /// Lock or unlock. Which one a press means is `LockControl.action(for:)`.
+    public static func lock(_ device: Device, _ action: LockControl.Action) -> ServiceCall? {
+        guard device.kind == .lock else { return nil }
+        return ServiceCall(domain: "lock", service: action.service, entityId: device.entityId, serviceData: [:])
+    }
+
+    /// Choose an `input_select` or `select` option. Both domains name the
+    /// service and its field the same way.
+    public static func selectOption(_ device: Device, _ option: String) -> ServiceCall? {
+        guard device.kind == .select else { return nil }
+        return ServiceCall(domain: device.domain, service: "select_option", entityId: device.entityId,
+                           serviceData: ["option": .string(option)])
+    }
+
+    /// Run a script with its fields filled in: the script's own service
+    /// (`script.<object_id>`) with the values as its variables, which is how
+    /// Home Assistant's Run dialog calls it. `script.turn_on` would also
+    /// work, but only via a `variables` wrapper.
+    public static func runScript(objectId: String, data: [String: JSONValue]) -> ServiceCall {
+        ServiceCall(domain: "script", service: objectId, entityIds: [], serviceData: data)
     }
 
     /// The WebSocket command body, without the `id` the client assigns.
