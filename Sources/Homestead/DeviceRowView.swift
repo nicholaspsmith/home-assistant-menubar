@@ -118,7 +118,14 @@ final class DeviceRowView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(state: EntityState?) {
-        let available = device.kind == .button ? ButtonAvailability.isAvailable(state) : (state?.isAvailable ?? false)
+        let available: Bool
+        switch device.kind {
+        case .button: available = ButtonAvailability.isAvailable(state)
+        // A lock or a select that has never reported is `unknown`, and still
+        // works: say so rather than greying it out as gone.
+        case .lock, .select: available = state != nil && state?.state != "unavailable"
+        default: available = state?.isAvailable ?? false
+        }
         toggle.isEnabled = available
         toggle.state = (state?.isOn ?? false) ? .on : .off
         nameLabel.textColor = available ? .labelColor : .tertiaryLabelColor
@@ -183,7 +190,11 @@ final class DeviceRowView: NSView {
             let name = state.state.prefix(1).uppercased() + state.state.dropFirst()
             guard positionable, let position = state.attributes["current_position"]?.int else { return name }
             return "\(name) · \(position)%"
-        case .toggle, .button:
+        case .lock:
+            return LockControl.text(state)
+        // The select's value is its own control, the button that opens the
+        // list.
+        case .toggle, .button, .select:
             return ""
         case .sensor:
             return SensorText.text(state)

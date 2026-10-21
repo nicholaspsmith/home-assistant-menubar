@@ -8,6 +8,16 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.15.0] - 2026-10-20
+
+- Locks appear in the menu with their state (Locked, Unlocked, Jammed…) and a Lock or Unlock button; Unlock asks for a second press to confirm.
+- Option lists (`input_select` and `select`) show their current option; click it to pick another without leaving the menu.
+- Scripts that ask for input show Run…, which opens a small form for their fields — including password fields — and runs the script with what you enter.
+
+### Fixed
+
+- Dragging a blind or shade's position slider now moves it once, when you let go, instead of sending a stream of positions that could leave a motorised shade jittering until stopped.
+
 ## [1.14.0] - 2026-10-20
 
 - Menu bar icons now update more smoothly with significantly less impact on system performance.

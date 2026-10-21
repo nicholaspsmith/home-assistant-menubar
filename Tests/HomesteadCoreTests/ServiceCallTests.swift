@@ -63,4 +63,13 @@ final class ServiceCallTests: XCTestCase {
         let dimmed = ServiceCall.setLevel(light, fraction: 0.4, state: nil)!.commandPayload
         XCTAssertEqual(dimmed["service_data"], .object(["brightness_pct": .number(40)]))
     }
+
+    func testOnlyCoversWaitForTheSliderToBeLetGo() {
+        // A burst of set_cover_position left a shade jittering; bulbs, fans
+        // and volume take a stream fine.
+        XCTAssertFalse(DeviceKind.cover(positionable: true).sendsLevelWhileDragging)
+        XCTAssertTrue(DeviceKind.light.sendsLevelWhileDragging)
+        XCTAssertTrue(DeviceKind.fan.sendsLevelWhileDragging)
+        XCTAssertTrue(DeviceKind.mediaPlayer.sendsLevelWhileDragging)
+    }
 }

@@ -25,21 +25,57 @@ enum SliderStyle: Equatable {
     }
 }
 
+/// An NSSlider that says when the mouse lets go. `mouseDown` runs the cell's
+/// own tracking loop and returns only once the button is up — inside an open
+/// menu as anywhere else — so the line after `super.mouseDown` is the release.
+/// Checking `NSApp.currentEvent` in the action would depend on which event
+/// loop (the menu's or the slider's) delivered it; this does not.
+private final class ReleasingSlider: NSSlider {
+    private(set) var isTracking = false
+    var onRelease: (() -> Void)?
+
+    override func mouseDown(with event: NSEvent) {
+        isTracking = true
+        super.mouseDown(with: event)
+        isTracking = false
+        onRelease?()
+    }
+}
+
 /// The slider that appears under a device while it is on. Modelled on
 /// KeyLight's backlight slider: continuous, and deaf to external updates while
 /// it is being dragged.
+///
+/// A slider that `commitsOnRelease` (a cover's) still moves continuously, but
+/// mid-drag values only go to `onPreview`, for the row to show; `onChange`
+/// gets the one value it is let go at.
 final class LevelSliderView: NSView {
-    private let slider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
+    private let slider = ReleasingSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
     private let captionLabel = NSTextField(labelWithString: "")
     private let onChange: (Double) -> Void
+    private let onPreview: ((Double) -> Void)?
+    private let commitsOnRelease: Bool
 
-    /// - Parameter caption: shown at the trailing end, for a slider whose value
-    ///   is not already on the row above it — a bulb's warmth in kelvin.
-    init(style: SliderStyle, fraction: Double, caption: String? = nil, onChange: @escaping (Double) -> Void) {
+    /// - Parameters:
+    ///   - caption: shown at the trailing end, for a slider whose value is not
+    ///     already on the row above it — a bulb's warmth in kelvin.
+    ///   - commitsOnRelease: send once, on mouse-up, rather than while
+    ///     dragging. See `DeviceKind.sendsLevelWhileDragging`.
+    init(style: SliderStyle, fraction: Double, caption: String? = nil,
+         commitsOnRelease: Bool = false, onPreview: ((Double) -> Void)? = nil,
+         onChange: @escaping (Double) -> Void) {
         self.onChange = onChange
+        self.onPreview = onPreview
+        self.commitsOnRelease = commitsOnRelease
         super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 24))
 
         slider.isContinuous = true
+        if commitsOnRelease {
+            slider.onRelease = { [weak self] in
+                guard let self else { return }
+                self.onChange(self.slider.doubleValue)
+            }
+        }
         slider.controlSize = .small
         slider.doubleValue = fraction
         slider.target = self
@@ -90,11 +126,17 @@ final class LevelSliderView: NSView {
     /// changed, in which case the drag wins.
     func update(fraction: Double, caption: String? = nil) {
         if let caption { captionLabel.stringValue = caption }
-        guard !slider.isHighlighted else { return }
+        guard !slider.isHighlighted, !slider.isTracking else { return }
         slider.doubleValue = fraction
     }
 
     @objc private func slid() {
-        onChange(slider.doubleValue)
+        // A change with no mouse behind it (VoiceOver's increment) is final
+        // as it stands.
+        if commitsOnRelease, slider.isTracking {
+            onPreview?(slider.doubleValue)
+        } else {
+            onChange(slider.doubleValue)
+        }
     }
 }

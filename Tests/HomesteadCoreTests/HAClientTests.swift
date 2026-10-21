@@ -157,6 +157,20 @@ final class HAClientTests: XCTestCase {
         }
     }
 
+    func testFrameTextReplyIsTheWholeFrame() async throws {
+        let transport = FakeTransport(initial: [#"{"type":"auth_required"}"#, #"{"type":"auth_ok"}"#])
+        let client = HAClient(transport: transport)
+        try await client.connect(url: url, token: "t")
+
+        async let reply = client.sendForFrameText(["type": .string("get_services")])
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let frame = #"{"id":1,"type":"result","success":true,"result":{"script":{"b":{},"a":{}}}}"#
+        transport.push(frame)
+
+        let text = try await reply
+        XCTAssertEqual(text, frame)
+    }
+
     func testSubscriptionDeliversEveryEventForItsId() async throws {
         let transport = FakeTransport(initial: [#"{"type":"auth_required"}"#, #"{"type":"auth_ok"}"#])
         let client = HAClient(transport: transport)
