@@ -133,7 +133,7 @@ that entity's normal row.
 | `light` | brightness % | switch, brightness slider, warmth slider in kelvin (tunable white), colour swatch opening the system picker (colour bulbs, once on and reporting a colour) |
 | `switch`, `input_boolean`, `remote`, `automation`, `group` | — | switch |
 | `button`, `input_button`, `script`, `scene` | — | Press / Run / Activate; a script with input fields shows **Run…**, which closes the menu and opens a small form for them (text, password, choice, number, checkbox), then runs it with what you entered |
-| `lock` | Locked/Unlocked/Locking/Unlocking/Jammed/Open | one button that does the opposite, **Lock** or **Unlock**, on the first press; off while the lock is moving. The only lock in a section with a heading is a **padlock on the heading** instead: click it to unlock (locked, green, closed) or lock (unlocked or open, orange, open); red with a warning badge when jammed (a click locks again); dim and unclickable while moving or unavailable. A section with two or more locks keeps them as rows |
+| `lock` | Locked/Unlocked/Locking/Unlocking/Jammed/Open | one button that does the opposite, **Lock** or **Unlock**, on the first press; off while the lock is moving. The only lock in a section with a heading is a **padlock on the heading** instead: click it to unlock (locked, green, closed) or lock (unlocked or open, red, open); red with a warning badge when jammed (a click locks again); orange and unclickable while moving, grey and unclickable when unavailable. A section with two or more locks keeps them as rows |
 | `input_select`, `select` | — | the current option as a button: click it to expand the options under the row, click one to choose it |
 | `fan` | speed % | switch, speed slider snapped to the fan's own step |
 | `cover` | Open/Closed/Opening, position | open / stop / close, position slider where supported (shown even while closed) |
@@ -222,11 +222,16 @@ Keychain, set it to `false` and sign in again in **Settings ▸ Connection…**.
   linearly in sRGB.
 - **A heading carries its section's padlock and battery**, padlock first, so
   a section that is one door reads as one line: its name, whether it is
-  locked, how much battery is left. Lock colours are Home Assistant's
-  `--state-lock-*-color` defaults (`--green-color` `#4caf50` locked,
-  `--red-color` `#f44336` jammed), except unlocked/open, which use
-  `--orange-color` `#ff9800` rather than HA's red, and a moving lock, which is
-  `--grey-color` `#9e9e9e` while it cannot be clicked.
+  locked, how much battery is left. Both sit in fixed-width columns against
+  the trailing edge (the value right-aligned in a slot that fits "100%" in
+  monospaced digits, the padlock drawn on the arc's 18 pt canvas), and a
+  heading missing one keeps its slot empty, so every heading's padlocks and
+  arcs line up. Lock colours are exactly Home
+  Assistant's `--state-lock-*-color` defaults: `--green-color` `#4caf50`
+  locked; `--red-color` `#f44336` unlocked, open and jammed;
+  `--orange-color` `#ff9800` locking, unlocking and opening; and
+  `--state-unavailable-color` (`--disabled-text-color` `#bdbdbd`) when
+  unavailable.
 - **Visibility conditions can read entities no row shows**, so those are
   added to the dashboard's state subscription.
 - **A script's form is a window.** A tracking menu keeps key events to

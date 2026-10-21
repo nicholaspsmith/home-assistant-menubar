@@ -94,17 +94,16 @@ public struct LockIcon: Equatable, Sendable {
     /// The tooltip and accessibility label: the state, and what a click does.
     public let label: String
 
-    /// Home Assistant's state colours (`--state-lock-*-color`, from the
-    /// frontend's `color.globals.ts`): locked is `--green-color`, jammed
-    /// `--red-color`. Unlocked and open are `--orange-color` here, where HA
-    /// uses red, so an unlocked door reads as a caution rather than a fault;
-    /// a lock on the move is `--grey-color` while it cannot be clicked, and
-    /// one that is gone `--disabled-color`.
+    /// Home Assistant's lock state colours, exactly as its frontend's
+    /// `color.globals.ts` defines them: `--state-lock-locked-color` is
+    /// `--green-color`; `-unlocked-`, `-open-` and `-jammed-color` are
+    /// `--red-color`; `-locking-`, `-unlocking-` and `-opening-color` are
+    /// `--orange-color`; and an unavailable entity is
+    /// `--state-unavailable-color`, i.e. `--disabled-text-color`.
     public static let green = RGBColor(hex: 0x4CAF50)
-    public static let orange = RGBColor(hex: 0xFF9800)
     public static let red = RGBColor(hex: 0xF44336)
-    public static let grey = RGBColor(hex: 0x9E9E9E)
-    public static let disabled = RGBColor(hex: 0xBDBDBD)
+    public static let orange = RGBColor(hex: 0xFF9800)
+    public static let unavailable = RGBColor(hex: 0xBDBDBD)
 
     public static let locked = "lock.fill"
     public static let unlocked = "lock.open.fill"
@@ -127,19 +126,19 @@ public struct LockIcon: Equatable, Sendable {
             self.init(symbol: Self.locked, color: Self.green, isEnabled: true, action: action,
                       label: "Locked — click to unlock")
         case "unlocked"?, "open"?:
-            self.init(symbol: Self.unlocked, color: Self.orange, isEnabled: true, action: action,
+            self.init(symbol: Self.unlocked, color: Self.red, isEnabled: true, action: action,
                       label: "\(text) — click to lock")
-        // Moving: the glyph it is heading for, dim, and not clickable until
+        // Moving: the glyph it is heading for, in orange, and not clickable until
         // it gets there.
         case "locking"?:
-            self.init(symbol: Self.locked, color: Self.grey, isEnabled: false, action: action, label: "Locking…")
+            self.init(symbol: Self.locked, color: Self.orange, isEnabled: false, action: action, label: "Locking…")
         case "unlocking"?, "opening"?:
-            self.init(symbol: Self.unlocked, color: Self.grey, isEnabled: false, action: action, label: "\(text)…")
+            self.init(symbol: Self.unlocked, color: Self.orange, isEnabled: false, action: action, label: "\(text)…")
         case "jammed"?:
             self.init(symbol: Self.jammed, color: Self.red, isEnabled: true, action: action,
                       label: "Jammed — click to lock again")
         default:
-            self.init(symbol: Self.locked, color: Self.disabled, isEnabled: false, action: action,
+            self.init(symbol: Self.locked, color: Self.unavailable, isEnabled: false, action: action,
                       label: state == nil ? "Unavailable" : text)
         }
     }

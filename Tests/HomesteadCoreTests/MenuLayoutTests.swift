@@ -152,18 +152,18 @@ final class MenuLayoutTests: XCTestCase {
 
         XCTAssertEqual(icon("locked"), LockIcon(symbol: "lock.fill", color: LockIcon.green, isEnabled: true,
                                                 action: .unlock, label: "Locked — click to unlock"))
-        XCTAssertEqual(icon("unlocked"), LockIcon(symbol: "lock.open.fill", color: LockIcon.orange, isEnabled: true,
+        XCTAssertEqual(icon("unlocked"), LockIcon(symbol: "lock.open.fill", color: LockIcon.red, isEnabled: true,
                                                   action: .lock, label: "Unlocked — click to lock"))
         XCTAssertEqual(icon("open").symbol, "lock.open.fill")
-        XCTAssertEqual(icon("open").color, LockIcon.orange)
+        XCTAssertEqual(icon("open").color, LockIcon.red)
         XCTAssertEqual(icon("open").action, .lock)
 
-        // Moving: the glyph it is heading for, dim and unclickable.
+        // Moving: the glyph it is heading for, orange and unclickable.
         XCTAssertEqual(icon("locking").symbol, "lock.fill")
         XCTAssertEqual(icon("unlocking").symbol, "lock.open.fill")
         XCTAssertEqual(icon("opening").symbol, "lock.open.fill")
         for state in ["locking", "unlocking", "opening"] {
-            XCTAssertEqual(icon(state).color, LockIcon.grey, state)
+            XCTAssertEqual(icon(state).color, LockIcon.orange, state)
             XCTAssertFalse(icon(state).isEnabled, state)
         }
 
@@ -174,7 +174,7 @@ final class MenuLayoutTests: XCTestCase {
         XCTAssertEqual(icon("jammed").action, .lock)
 
         for state in ["unavailable", "unknown", nil] {
-            XCTAssertEqual(icon(state).color, LockIcon.disabled)
+            XCTAssertEqual(icon(state).color, LockIcon.unavailable)
             XCTAssertFalse(icon(state).isEnabled)
         }
     }

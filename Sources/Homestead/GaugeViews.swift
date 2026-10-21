@@ -21,12 +21,16 @@ final class GaugeMeterView: NSStackView {
         self.gauge = gauge
         super.init(frame: .zero)
         orientation = .horizontal
-        spacing = 3
-        label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize(for: .small), weight: .regular)
+        spacing = HeadingColumns.arcToValue
+        label.font = HeadingColumns.valueFont
         label.textColor = .secondaryLabelColor
+        // A fixed width, right-aligned, so "88%" and "100%" leave the arc in
+        // the same place.
+        label.alignment = .right
+        label.widthAnchor.constraint(equalToConstant: HeadingColumns.valueWidth).isActive = true
         arc.imageScaling = .scaleNone
-        arc.widthAnchor.constraint(equalToConstant: 18).isActive = true
-        arc.heightAnchor.constraint(equalToConstant: 18).isActive = true
+        arc.widthAnchor.constraint(equalToConstant: HeadingColumns.icon).isActive = true
+        arc.heightAnchor.constraint(equalToConstant: HeadingColumns.icon).isActive = true
         addArrangedSubview(arc)
         addArrangedSubview(label)
         update(state: state)
@@ -68,22 +72,50 @@ final class HeadingView: NSView {
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         meter?.setAccessibilityLabel(gauge?.displayName)
-        padlock?.symbolConfiguration = .init(pointSize: 13, weight: .semibold)
+        padlock?.imagePosition = .imageOnly
+        padlock?.imageScaling = .scaleNone
 
-        let trailing = NSStackView(views: [padlock, meter].compactMap { $0 })
-        trailing.orientation = .horizontal
-        trailing.spacing = 10
-        for view in [label, trailing] {
+        // Two fixed columns against the trailing edge — padlock, then arc and
+        // value — so every heading's icons line up whatever its text or value.
+        // A heading with only one of them keeps the other's slot empty.
+        let lockSlot = NSView()
+        let meterSlot = NSView()
+        for view in [label, lockSlot, meterSlot] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+        var constraints: [NSLayoutConstraint] = [
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: HeadingColumns.inset),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            trailing.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            trailing.centerYAnchor.constraint(equalTo: centerYAnchor),
-            trailing.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 8),
-        ])
+            meterSlot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -HeadingColumns.inset),
+            meterSlot.widthAnchor.constraint(equalToConstant: HeadingColumns.meterWidth),
+            meterSlot.topAnchor.constraint(equalTo: topAnchor),
+            meterSlot.bottomAnchor.constraint(equalTo: bottomAnchor),
+            lockSlot.trailingAnchor.constraint(equalTo: meterSlot.leadingAnchor, constant: -HeadingColumns.gap),
+            lockSlot.widthAnchor.constraint(equalToConstant: HeadingColumns.icon),
+            lockSlot.topAnchor.constraint(equalTo: topAnchor),
+            lockSlot.bottomAnchor.constraint(equalTo: bottomAnchor),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: lockSlot.leadingAnchor, constant: -HeadingColumns.gap),
+        ]
+        if let padlock {
+            padlock.translatesAutoresizingMaskIntoConstraints = false
+            lockSlot.addSubview(padlock)
+            constraints += [
+                padlock.centerXAnchor.constraint(equalTo: lockSlot.centerXAnchor),
+                padlock.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+                padlock.widthAnchor.constraint(equalToConstant: HeadingColumns.icon),
+                padlock.heightAnchor.constraint(equalToConstant: HeadingColumns.icon),
+            ]
+        }
+        if let meter {
+            meter.translatesAutoresizingMaskIntoConstraints = false
+            meterSlot.addSubview(meter)
+            constraints += [
+                meter.trailingAnchor.constraint(equalTo: meterSlot.trailingAnchor),
+                meter.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+            ]
+        }
+        NSLayoutConstraint.activate(constraints)
         if let gauge { updateGauge(state: states[gauge.entityId]) }
         if let lock { updateLock(state: states[lock.entityId]) }
     }
@@ -92,17 +124,37 @@ final class HeadingView: NSView {
 
     func updateGauge(state: EntityState?) { meter?.update(state: state) }
 
-    /// Closed and green when locked, open and orange when not, red when
+    /// Closed and green when locked, open and red when not, red when
     /// jammed; dim and unclickable while it moves or is gone.
     func updateLock(state: EntityState?) {
         guard let padlock else { return }
         let icon = LockIcon(state: state)
-        padlock.image = NSImage(systemSymbolName: icon.symbol, accessibilityDescription: icon.label)
-            ?? NSImage(systemSymbolName: LockIcon.locked, accessibilityDescription: icon.label)
-        padlock.contentTintColor = NSColor(srgbRed: icon.color.red, green: icon.color.green,
-                                           blue: icon.color.blue, alpha: 1)
+        // Drawn on the same 18 pt canvas as the arc (`MeterIcon.symbol`), so
+        // a wide glyph (jammed) sits in exactly the same place as a narrow
+        // one and the column stays straight.
+        let symbol = NSImage(systemSymbolName: icon.symbol, accessibilityDescription: nil) != nil
+            ? icon.symbol : LockIcon.locked
+        padlock.image = MeterIcon.symbol(symbol,
+                                         color: NSColor(srgbRed: icon.color.red, green: icon.color.green,
+                                                        blue: icon.color.blue, alpha: 1),
+                                         pointSize: HeadingColumns.symbolPointSize)
         padlock.isEnabled = icon.isEnabled
         padlock.toolTip = icon.label
         padlock.setAccessibilityLabel(icon.label)
     }
+}
+
+/// The heading row's trailing columns: one width for every heading, so the
+/// padlocks form one column and the arcs another.
+enum HeadingColumns {
+    static let inset: CGFloat = 14
+    static let gap: CGFloat = 8
+    /// The padlock's slot, and the arc image: both 18 pt square.
+    static let icon: CGFloat = 18
+    static let symbolPointSize: CGFloat = 13
+    static let arcToValue: CGFloat = 3
+    static let valueFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize(for: .small), weight: .regular)
+    /// Wide enough for "100%", the widest a gauge's value usually gets.
+    static let valueWidth: CGFloat = ceil(("100%" as NSString).size(withAttributes: [.font: valueFont]).width) + 2
+    static var meterWidth: CGFloat { icon + arcToValue + valueWidth }
 }
