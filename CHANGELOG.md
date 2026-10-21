@@ -8,6 +8,14 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.16.0] - 2026-10-20
+
+- Gauge cards show as a small arc meter with their value, coloured like Home Assistant's gauge (green to yellow to red, blending smoothly), at the end of their section's heading — a lock's battery beside the lock's name.
+- Rows the dashboard puts side by side in a horizontal stack share one line in the menu.
+- Cards with visibility conditions appear and disappear live as the conditions change, without reopening the menu.
+- Lock and Unlock both act on the first press.
+- A dashboard's later views fold under their titles; click one to show its rows.
+
 ## [1.15.0] - 2026-10-20
 
 - Locks appear in the menu with their state (Locked, Unlocked, Jammed…) and a Lock or Unlock button; Unlock asks for a second press to confirm.

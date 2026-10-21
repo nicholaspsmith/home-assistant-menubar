@@ -194,7 +194,8 @@ final class DeviceRowView: NSView {
             return LockControl.text(state)
         // The select's value is its own control, the button that opens the
         // list.
-        case .toggle, .button, .select:
+        // A gauge's value is drawn beside its arc.
+        case .toggle, .button, .select, .gauge:
             return ""
         case .sensor:
             return SensorText.text(state)

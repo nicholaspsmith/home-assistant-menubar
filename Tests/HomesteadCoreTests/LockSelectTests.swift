@@ -49,9 +49,18 @@ final class LockSelectTests: XCTestCase {
         XCTAssertNil(ServiceCall.lock(volume, .lock))
     }
 
-    func testOnlyUnlockAsksFirst() {
-        XCTAssertTrue(LockControl.Action.unlock.needsConfirmation)
-        XCTAssertFalse(LockControl.Action.lock.needsConfirmation)
+    func testLockAndUnlockActOnTheFirstPress() {
+        // One press, one call, either way: no confirming second press.
+        XCTAssertEqual(ServiceCall.lockPress(lock, state: EntityState(state: "locked")),
+                       ServiceCall(domain: "lock", service: "unlock", entityId: "lock.back_door", serviceData: [:]))
+        XCTAssertEqual(ServiceCall.lockPress(lock, state: EntityState(state: "unlocked")),
+                       ServiceCall(domain: "lock", service: "lock", entityId: "lock.back_door", serviceData: [:]))
+        XCTAssertNil(ServiceCall.lockPress(lock, state: EntityState(state: "unlocking")))
+        // A lock's row is the entity, not a card button carrying a confirmation.
+        let row = DeviceCatalog.build(refs: [DeviceRef(entityId: "lock.back_door", nameOverride: nil, header: "Doors")],
+                                      states: [:], showSensors: false).first?.devices.first
+        XCTAssertEqual(row?.kind, .lock)
+        XCTAssertNil(row?.action?.confirmation)
         XCTAssertEqual(LockControl.Action.unlock.title, "Unlock")
         XCTAssertEqual(LockControl.Action.lock.title, "Lock")
     }

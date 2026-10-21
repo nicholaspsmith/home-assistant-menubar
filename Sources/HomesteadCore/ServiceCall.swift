@@ -38,7 +38,7 @@ public struct ServiceCall: Equatable, Sendable {
         case .cover:
             return ServiceCall(domain: "cover", service: on ? "open_cover" : "close_cover",
                                entityId: device.entityId, serviceData: [:])
-        case .sensor, .button, .lock, .select:
+        case .sensor, .button, .lock, .select, .gauge:
             return nil
         }
     }
@@ -118,7 +118,7 @@ public struct ServiceCall: Equatable, Sendable {
         case .mediaPlayer:
             return ServiceCall(domain: "media_player", service: "volume_set", entityId: device.entityId,
                                serviceData: ["volume_level": .number(min(max(fraction, 0), 1))])
-        case .thermostat, .toggle, .sensor, .button, .lock, .select:
+        case .thermostat, .toggle, .sensor, .button, .lock, .select, .gauge:
             return nil
         }
     }
@@ -178,6 +178,13 @@ public struct ServiceCall: Equatable, Sendable {
     public static func lock(_ device: Device, _ action: LockControl.Action) -> ServiceCall? {
         guard device.kind == .lock else { return nil }
         return ServiceCall(domain: "lock", service: action.service, entityId: device.entityId, serviceData: [:])
+    }
+
+    /// What one press of a lock's button sends: the opposite of its state,
+    /// straight away — there is no confirming second press.
+    public static func lockPress(_ device: Device, state: EntityState?) -> ServiceCall? {
+        guard LockControl.isEnabled(state) else { return nil }
+        return lock(device, LockControl.action(for: state))
     }
 
     /// Choose an `input_select` or `select` option. Both domains name the

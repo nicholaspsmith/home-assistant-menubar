@@ -7,8 +7,8 @@
 import Foundation
 
 /// What a lock's row says and what its one button does. A lock is not a
-/// switch: unlocking a door from a menu should take a second, deliberate
-/// press, and a lock part-way through moving has no honest on/off.
+/// switch: a lock part-way through moving has no honest on/off. Both Lock and
+/// Unlock act on the first press, as the dashboard's own lock controls do.
 public enum LockControl {
     public enum Action: Equatable, Sendable {
         case lock, unlock
@@ -27,10 +27,6 @@ public enum LockControl {
             case .unlock: return "Unlock"
             }
         }
-
-        /// Unlocking asks first; locking never does — a door left locked by
-        /// a stray click is the safe mistake.
-        public var needsConfirmation: Bool { self == .unlock }
     }
 
     /// The state worded the way Home Assistant shows it.

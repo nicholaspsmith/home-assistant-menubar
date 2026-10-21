@@ -7,9 +7,8 @@
 import AppKit
 import HomesteadCore
 
-/// A lock's one button: Lock when it is not locked, Unlock when it is.
-/// Unlock asks inline first (Confirm?, then a second press), the same way a
-/// dashboard card with `confirmation` does; Lock just locks.
+/// A lock's one button: Lock when it is not locked, Unlock when it is. Both
+/// act on the first press.
 final class LockButton: PressButton {
     /// What the next (confirmed) press does. Not `action`: that is
     /// NSControl's selector.
@@ -19,7 +18,7 @@ final class LockButton: PressButton {
         let action = LockControl.action(for: state)
         lockAction = action
         super.init(title: action.title, symbol: nil, iconOnly: false,
-                   confirmation: Self.confirmation(for: action), onPress: {})
+                   confirmation: nil, onPress: {})
         onConfirmedPress = { [weak self] in
             guard let self else { return }
             onAction(self.lockAction)
@@ -29,17 +28,13 @@ final class LockButton: PressButton {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    private static func confirmation(for action: LockControl.Action) -> String? {
-        action.needsConfirmation ? "Press again to unlock" : nil
-    }
-
     /// Follows the lock: the button flips once the lock reports the new
     /// state, and is off while it is moving or gone.
     func update(state: EntityState?) {
         let next = LockControl.action(for: state)
         if next != lockAction {
             lockAction = next
-            retitle(next.title, confirmation: Self.confirmation(for: next))
+            retitle(next.title, confirmation: nil)
         }
         isEnabled = LockControl.isEnabled(state)
     }
