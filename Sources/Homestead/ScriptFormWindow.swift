@@ -15,7 +15,7 @@ import HomesteadCore
 /// with the close button — empties the fields and lets the window go.
 @MainActor
 final class ScriptFormWindowController: NSWindowController, NSWindowDelegate, NSTextFieldDelegate {
-    /// The script, `lock_code_add` for `script.lock_code_add`.
+    /// The script, `add_guest` for `script.add_guest`.
     let objectId: String
     private let fields: [ScriptField]
     private let onRun: ([String: JSONValue]) async throws -> Void

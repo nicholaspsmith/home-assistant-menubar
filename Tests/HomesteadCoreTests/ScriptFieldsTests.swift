@@ -9,20 +9,20 @@ import XCTest
 
 final class ScriptFieldsTests: XCTestCase {
     /// A `get_services` reply as Home Assistant sends it, trimmed: the
-    /// passcode script's fields, declared name, pin, lock — not alphabetical.
+    /// guest script's fields, declared name, password, area — not alphabetical.
     private let frame = #"""
     {"id":7,"type":"result","success":true,"result":{
       "light":{"turn_on":{"fields":{"brightness":{"selector":{"number":{}}}}}},
       "script":{
-        "lock_code_add":{"name":"Locks: add passcode","fields":{
-          "name":{"name":"Name","description":"Who the code is for (up to 10 characters)","required":true,
+        "add_guest":{"name":"Add guest","fields":{
+          "name":{"name":"Name","description":"Who is staying","required":true,
                   "selector":{"text":{"multiline":false,"multiple":false}}},
-          "pin":{"name":"Passcode","description":"4 to 8 digits","required":true,
+          "password":{"name":"Wi-Fi password","description":"Shared with the guest","required":true,
                  "selector":{"text":{"type":"password","multiline":false}}},
-          "lock":{"name":"Lock","required":true,"default":"All locks",
-                  "selector":{"select":{"options":["All locks","Front Door","Garage Door","Patio Door"]}}}
+          "area":{"name":"Area","required":true,"default":"Everywhere",
+                  "selector":{"select":{"options":["Everywhere","Kitchen","Office","Garden"]}}}
         },"response":{"optional":true}},
-        "lock_code_remove":{"name":"Locks: remove passcode","fields":{}},
+        "end_party":{"name":"End party","fields":{}},
         "fade":{"fields":{
           "level":{"selector":{"number":{"min":0,"max":100}},"default":40},
           "quiet":{"name":"Quiet \"mode\"","selector":{"boolean":{}},"default":true},
@@ -35,16 +35,16 @@ final class ScriptFieldsTests: XCTestCase {
     func testScriptsWithFieldsAreReadInDeclaredOrder() {
         let scripts = ScriptFields.parse(servicesFrame: frame)
 
-        XCTAssertEqual(Set(scripts.keys), ["lock_code_add", "fade"])   // no fields, no form
-        let add = scripts["lock_code_add"] ?? []
-        XCTAssertEqual(add.map(\.key), ["name", "pin", "lock"])
-        XCTAssertEqual(add.map(\.name), ["Name", "Passcode", "Lock"])
-        XCTAssertEqual(add[0].description, "Who the code is for (up to 10 characters)")
+        XCTAssertEqual(Set(scripts.keys), ["add_guest", "fade"])   // no fields, no form
+        let add = scripts["add_guest"] ?? []
+        XCTAssertEqual(add.map(\.key), ["name", "password", "area"])
+        XCTAssertEqual(add.map(\.name), ["Name", "Wi-Fi password", "Area"])
+        XCTAssertEqual(add[0].description, "Who is staying")
         XCTAssertEqual(add[0].control, .text(secure: false))
         XCTAssertEqual(add[1].control, .text(secure: true))
-        XCTAssertEqual(add[2].control, .select(["All locks", "Front Door", "Garage Door", "Patio Door"]
+        XCTAssertEqual(add[2].control, .select(["Everywhere", "Kitchen", "Office", "Garden"]
             .map { ScriptField.Option(value: $0, label: $0) }))
-        XCTAssertEqual(add[2].defaultValue, .string("All locks"))
+        XCTAssertEqual(add[2].defaultValue, .string("Everywhere"))
         XCTAssertTrue(add.allSatisfy(\.required))
     }
 
@@ -64,7 +64,7 @@ final class ScriptFieldsTests: XCTestCase {
 
     func testFieldsFallBackToAlphabeticalWithoutTheText() throws {
         let result = try XCTUnwrap(JSONValue.parse(Data(frame.utf8))["result"])
-        XCTAssertEqual(ScriptFields.parse(services: result)["lock_code_add"]?.map(\.key), ["lock", "name", "pin"])
+        XCTAssertEqual(ScriptFields.parse(services: result)["add_guest"]?.map(\.key), ["area", "name", "password"])
     }
 
     func testDefaultsPrefillTheForm() {
@@ -74,20 +74,20 @@ final class ScriptFieldsTests: XCTestCase {
         XCTAssertEqual(values["quiet"], .bool(true))
         XCTAssertEqual(values["room"], .text(""))
 
-        let add = ScriptFields.parse(servicesFrame: frame)["lock_code_add"] ?? []
-        XCTAssertEqual(ScriptForm.initialValues(add), ["name": .text(""), "pin": .text(""), "lock": .text("All locks")])
+        let add = ScriptFields.parse(servicesFrame: frame)["add_guest"] ?? []
+        XCTAssertEqual(ScriptForm.initialValues(add), ["name": .text(""), "password": .text(""), "area": .text("Everywhere")])
     }
 
     func testRunWaitsForEveryRequiredField() {
-        let add = ScriptFields.parse(servicesFrame: frame)["lock_code_add"] ?? []
+        let add = ScriptFields.parse(servicesFrame: frame)["add_guest"] ?? []
         var values = ScriptForm.initialValues(add)
         XCTAssertNil(ScriptForm.serviceData(fields: add, values: values))
         values["name"] = .text("Sam")
-        values["pin"] = .text("   ")
+        values["password"] = .text("   ")
         XCTAssertNil(ScriptForm.serviceData(fields: add, values: values))   // blank is empty
-        values["pin"] = .text("1234")
+        values["password"] = .text("1234")
         XCTAssertEqual(ScriptForm.serviceData(fields: add, values: values),
-                       ["name": .string("Sam"), "pin": .string("1234"), "lock": .string("All locks")])
+                       ["name": .string("Sam"), "password": .string("1234"), "area": .string("Everywhere")])
     }
 
     func testServiceDataTypesNumbersAndSwitches() {
@@ -109,11 +109,11 @@ final class ScriptFieldsTests: XCTestCase {
     }
 
     func testRunningAScriptCallsItsOwnService() {
-        let call = ServiceCall.runScript(objectId: "lock_code_add", data: ["name": .string("Sam")])
+        let call = ServiceCall.runScript(objectId: "add_guest", data: ["name": .string("Sam")])
         XCTAssertEqual(call.commandPayload, [
             "type": .string("call_service"),
             "domain": .string("script"),
-            "service": .string("lock_code_add"),
+            "service": .string("add_guest"),
             "service_data": .object(["name": .string("Sam")]),
         ])
     }

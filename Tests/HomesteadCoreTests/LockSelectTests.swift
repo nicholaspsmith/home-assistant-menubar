@@ -8,16 +8,16 @@ import XCTest
 @testable import HomesteadCore
 
 final class LockSelectTests: XCTestCase {
-    private let lock = Device(entityId: "lock.front_door_deadbolt", displayName: "Lock", kind: .lock)
-    private let autoLockTime = Device(entityId: "input_select.front_door_auto_lock_time", displayName: "Lock after",
+    private let lock = Device(entityId: "lock.back_door", displayName: "Lock", kind: .lock)
+    private let houseMode = Device(entityId: "input_select.house_mode", displayName: "House mode",
                                       kind: .select)
-    private let volume = Device(entityId: "select.front_door_deadbolt_sound_volume", displayName: "Volume",
+    private let volume = Device(entityId: "select.speaker_volume", displayName: "Volume",
                                 kind: .select)
 
     func testLocksAndSelectsGetTheirOwnKinds() {
-        let refs = ["lock.front_door_deadbolt", "input_select.front_door_auto_lock_time",
-                    "select.front_door_deadbolt_sound_volume"]
-            .map { DeviceRef(entityId: $0, nameOverride: nil, header: "Front Door") }
+        let refs = ["lock.back_door", "input_select.house_mode",
+                    "select.speaker_volume"]
+            .map { DeviceRef(entityId: $0, nameOverride: nil, header: "Back Door") }
         let devices = DeviceCatalog.build(refs: refs, states: [:], showSensors: false).flatMap(\.devices)
         XCTAssertEqual(devices.map(\.kind), [.lock, .select, .select])
         // Neither is switched: a lock gets one button, a select its options.
@@ -40,10 +40,10 @@ final class LockSelectTests: XCTestCase {
         }
 
         XCTAssertEqual(ServiceCall.lock(lock, LockControl.action(for: EntityState(state: "locked"))),
-                       ServiceCall(domain: "lock", service: "unlock", entityId: "lock.front_door_deadbolt",
+                       ServiceCall(domain: "lock", service: "unlock", entityId: "lock.back_door",
                                    serviceData: [:]))
         XCTAssertEqual(ServiceCall.lock(lock, LockControl.action(for: EntityState(state: "unlocked"))),
-                       ServiceCall(domain: "lock", service: "lock", entityId: "lock.front_door_deadbolt",
+                       ServiceCall(domain: "lock", service: "lock", entityId: "lock.back_door",
                                    serviceData: [:]))
         // Only a lock is locked.
         XCTAssertNil(ServiceCall.lock(volume, .lock))
@@ -67,23 +67,23 @@ final class LockSelectTests: XCTestCase {
     }
 
     func testChoosingAnOptionCallsTheDomainsSelectOption() {
-        XCTAssertEqual(ServiceCall.selectOption(autoLockTime, "5m"),
+        XCTAssertEqual(ServiceCall.selectOption(houseMode, "Away"),
                        ServiceCall(domain: "input_select", service: "select_option",
-                                   entityId: "input_select.front_door_auto_lock_time",
-                                   serviceData: ["option": .string("5m")]))
+                                   entityId: "input_select.house_mode",
+                                   serviceData: ["option": .string("Away")]))
         XCTAssertEqual(ServiceCall.selectOption(volume, "low")?.domain, "select")
-        XCTAssertNil(ServiceCall.selectOption(lock, "5m"))
+        XCTAssertNil(ServiceCall.selectOption(lock, "Away"))
     }
 
     func testSelectOptionsComeFromTheEntity() {
-        let state = EntityState(state: "10m", attributes: [
-            "options": .array(["30s", "2m", "5m", "10m"].map { .string($0) }),
+        let state = EntityState(state: "Night", attributes: [
+            "options": .array(["Home", "Away", "Night", "Vacation"].map { .string($0) }),
         ])
-        XCTAssertEqual(SelectOptions.options(of: state), ["30s", "2m", "5m", "10m"])
+        XCTAssertEqual(SelectOptions.options(of: state), ["Home", "Away", "Night", "Vacation"])
         XCTAssertTrue(SelectOptions.canChoose(state))
         // A scene select never yet set is `unknown`, and choosing is how it stops.
         XCTAssertTrue(SelectOptions.canChoose(EntityState(state: "unknown", attributes: state.attributes)))
         XCTAssertFalse(SelectOptions.canChoose(EntityState(state: "unavailable", attributes: state.attributes)))
-        XCTAssertFalse(SelectOptions.canChoose(EntityState(state: "10m")))
+        XCTAssertFalse(SelectOptions.canChoose(EntityState(state: "Night")))
     }
 }

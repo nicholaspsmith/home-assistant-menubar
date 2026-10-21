@@ -102,8 +102,8 @@ public struct ScriptField: Equatable, Sendable {
 }
 
 public enum ScriptFields {
-    /// Every script that asks for input, by object id (`lock_code_add` for
-    /// `script.lock_code_add`), with its fields in the order the script
+    /// Every script that asks for input, by object id (`add_guest` for
+    /// `script.add_guest`), with its fields in the order the script
     /// declares them. Scripts without fields are left out.
     ///
     /// - Parameter servicesFrame: the whole `result` frame of a `get_services`
