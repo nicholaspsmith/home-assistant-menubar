@@ -69,8 +69,7 @@ final class MenuLayoutTests: XCTestCase {
     func testAHorizontalStackOfRowsSharesALine() throws {
         let doors = try XCTUnwrap(groups().first)
         let runs = MenuLayout.runs(doors.devices)
-        XCTAssertEqual(runs.count, 2)
-        XCTAssertEqual(runs.first, .row(doors.devices[0]))
+        XCTAssertEqual(runs.count, 1)   // the lock is on the heading
         guard case .line(let line)? = runs.last else { return XCTFail("expected a shared line") }
         XCTAssertEqual(line.map(\.entityId), ["input_boolean.porch_light", "input_select.house_mode"])
     }
@@ -118,5 +117,65 @@ final class MenuLayoutTests: XCTestCase {
         XCTAssertEqual(groups.map(\.view), [0, 0, 1])
         XCTAssertEqual(groups.last?.viewTitle, "Extras")
         XCTAssertEqual(groups.last?.title, "Garden")
+    }
+
+    // MARK: - Padlock on the heading
+
+    func testASectionsOnlyLockMovesOntoItsHeading() throws {
+        let doors = try XCTUnwrap(groups().first)
+        XCTAssertEqual(doors.headingLock?.entityId, "lock.back_door")
+        XCTAssertFalse(doors.devices.contains { $0.kind == .lock })
+    }
+
+    func testPromotionNeedsAHeadingAndExactlyOneLock() {
+        let back = Device(entityId: "lock.back_door", displayName: "Back", kind: .lock)
+        let side = Device(entityId: "lock.side_gate", displayName: "Side", kind: .lock)
+        let porch = Device(entityId: "input_boolean.porch_light", displayName: "Porch", kind: .toggle)
+
+        let one = LockPlacement.promote(DeviceGroup(title: "Back Door", devices: [back, porch], headed: true))
+        XCTAssertEqual(one.headingLock, back)
+        XCTAssertEqual(one.devices, [porch])
+
+        // No heading on the dashboard (the view's name stands in): a row.
+        let unheaded = LockPlacement.promote(DeviceGroup(title: "Doors", devices: [back, porch]))
+        XCTAssertNil(unheaded.headingLock)
+        XCTAssertEqual(unheaded.devices, [back, porch])
+
+        // Two locks: two padlocks would not say which door is which.
+        let two = LockPlacement.promote(DeviceGroup(title: "Doors", devices: [back, side], headed: true))
+        XCTAssertNil(two.headingLock)
+        XCTAssertEqual(two.devices, [back, side])
+    }
+
+    func testThePadlockFollowsTheLocksState() {
+        func icon(_ state: String?) -> LockIcon { LockIcon(state: state.map { EntityState(state: $0) }) }
+
+        XCTAssertEqual(icon("locked"), LockIcon(symbol: "lock.fill", color: LockIcon.green, isEnabled: true,
+                                                action: .unlock, label: "Locked — click to unlock"))
+        XCTAssertEqual(icon("unlocked"), LockIcon(symbol: "lock.open.fill", color: LockIcon.orange, isEnabled: true,
+                                                  action: .lock, label: "Unlocked — click to lock"))
+        XCTAssertEqual(icon("open").symbol, "lock.open.fill")
+        XCTAssertEqual(icon("open").color, LockIcon.orange)
+        XCTAssertEqual(icon("open").action, .lock)
+
+        // Moving: the glyph it is heading for, dim and unclickable.
+        XCTAssertEqual(icon("locking").symbol, "lock.fill")
+        XCTAssertEqual(icon("unlocking").symbol, "lock.open.fill")
+        XCTAssertEqual(icon("opening").symbol, "lock.open.fill")
+        for state in ["locking", "unlocking", "opening"] {
+            XCTAssertEqual(icon(state).color, LockIcon.grey, state)
+            XCTAssertFalse(icon(state).isEnabled, state)
+        }
+
+        // Jammed: red, a warning glyph, and a click retries locking.
+        XCTAssertEqual(icon("jammed").color, LockIcon.red)
+        XCTAssertEqual(icon("jammed").symbol, LockIcon.jammed)
+        XCTAssertTrue(icon("jammed").isEnabled)
+        XCTAssertEqual(icon("jammed").action, .lock)
+
+        for state in ["unavailable", "unknown", nil] {
+            XCTAssertEqual(icon(state).color, LockIcon.disabled)
+            XCTAssertFalse(icon(state).isEnabled)
+        }
     }
 }

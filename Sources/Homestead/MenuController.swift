@@ -120,11 +120,22 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// one dashboard grid keep its columns; a lone one is a row with a Press
     /// button) and lines of rows a horizontal stack put side by side.
     private func addGroup(_ group: DeviceGroup, to menu: NSMenu, snapshot: Snapshot) {
-        if let gauge = group.headingGauge {
-            let heading = HeadingGaugeView(title: group.title.uppercased(), gauge: gauge,
-                                           state: snapshot.states[gauge.entityId])
-            addItem(heading, to: menu, entityId: gauge.entityId, state: snapshot.states[gauge.entityId],
-                    update: heading.update(state:))
+        if group.headingGauge != nil || group.headingLock != nil {
+            // The section's padlock and battery sit at the end of its name.
+            let heading = HeadingView(title: group.title.uppercased(), gauge: group.headingGauge,
+                                      lock: group.headingLock, states: snapshot.states) { [weak self] lock in
+                guard let self else { return }
+                self.model.lock(lock, LockIcon(state: self.model.state(for: lock.entityId)).action)
+            }
+            let item = NSMenuItem()
+            item.view = heading
+            menu.addItem(item)
+            if let gauge = group.headingGauge {
+                updaters[gauge.entityId, default: []].append { heading.updateGauge(state: $0) }
+            }
+            if let lock = group.headingLock {
+                updaters[lock.entityId, default: []].append { heading.updateLock(state: $0) }
+            }
         } else {
             let header = NSMenuItem(title: group.title.uppercased(), action: nil, keyEquivalent: "")
             header.isEnabled = false

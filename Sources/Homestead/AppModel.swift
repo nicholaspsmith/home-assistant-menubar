@@ -652,8 +652,8 @@ final class AppModel {
     private func rebuildGroups() {
         snapshot.states = store.states
         snapshot.groups = DeviceCatalog.build(refs: refs, states: store.states, showSensors: settings.showSensors)
-        // A gauge in a heading is shown too, just not as a row.
-        let shown = snapshot.groups.flatMap { $0.devices + [$0.headingGauge].compactMap { $0 } }
+        // A gauge or padlock in a heading is shown too, just not as a row.
+        let shown = snapshot.groups.flatMap { $0.devices + [$0.headingLock, $0.headingGauge].compactMap { $0 } }
         let shownIds = Set(shown.map(\.entityId))
         let skipped = refs.map(\.entityId).filter { !shownIds.contains($0) }
         let rowSummary = shown.map { "\($0.entityId)=\($0.kind)" }.joined(separator: ", ")

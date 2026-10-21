@@ -108,15 +108,23 @@ public struct DeviceGroup: Equatable, Sendable {
     /// A gauge drawn at the end of the group's heading rather than as a row
     /// of its own: a section's battery beside the section's name.
     public let headingGauge: Device?
+    /// A lock drawn as a padlock on the heading: see `LockPlacement`.
+    public let headingLock: Device?
+    /// Whether the group's title is a heading on the dashboard (a heading
+    /// card, or a card or section title) rather than the view's name.
+    public let headed: Bool
     /// The dashboard view the group is on, and that view's title. Views after
     /// the first fold away under their titles.
     public let view: Int
     public let viewTitle: String
 
-    public init(title: String, devices: [Device], headingGauge: Device? = nil, view: Int = 0, viewTitle: String = "") {
+    public init(title: String, devices: [Device], headingGauge: Device? = nil, headingLock: Device? = nil,
+                headed: Bool = false, view: Int = 0, viewTitle: String = "") {
         self.title = title
         self.devices = devices
         self.headingGauge = headingGauge
+        self.headingLock = headingLock
+        self.headed = headed
         self.view = view
         self.viewTitle = viewTitle
     }
@@ -161,16 +169,18 @@ public enum DeviceCatalog {
             if let last = groups.last, last.title == ref.header, last.view == ref.view {
                 current = groups.removeLast()
             } else {
-                current = DeviceGroup(title: ref.header, devices: [], view: ref.view, viewTitle: ref.viewTitle)
+                current = DeviceGroup(title: ref.header, devices: [], headed: ref.headed,
+                                      view: ref.view, viewTitle: ref.viewTitle)
             }
             let inHeading = GaugePlacement.inHeading(ref, groupHasGauge: current.headingGauge != nil)
             groups.append(DeviceGroup(title: current.title,
                                       devices: inHeading ? current.devices : current.devices + [device],
                                       headingGauge: inHeading ? device : current.headingGauge,
-                                      view: current.view, viewTitle: current.viewTitle))
+                                      headed: current.headed, view: current.view, viewTitle: current.viewTitle))
         }
 
-        return groups
+        // A headed section with one lock shows it as a padlock on the heading.
+        return groups.map(LockPlacement.promote)
     }
 
     /// A card button with neither a name nor a known entity: say what it calls.

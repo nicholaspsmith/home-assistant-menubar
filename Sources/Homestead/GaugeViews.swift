@@ -49,34 +49,60 @@ final class GaugeMeterView: NSStackView {
     }
 }
 
-/// A group heading with its section's gauge at the trailing end — a lock's
-/// battery beside the lock's name. Looks like the plain heading items.
-final class HeadingGaugeView: NSView {
-    private let meter: GaugeMeterView
+/// A group heading with its section's lock and gauge at the trailing end —
+/// a door's name, a padlock to lock or unlock it, its battery. Looks like the
+/// plain heading items.
+final class HeadingView: NSView {
+    private let meter: GaugeMeterView?
+    private let padlock: ClosureButton?
 
-    init(title: String, gauge: Device, state: EntityState?) {
-        meter = GaugeMeterView(gauge: gauge.gauge ?? GaugeSpec(), state: state)
+    init(title: String, gauge: Device?, lock: Device?, states: [String: EntityState],
+         onLock: @escaping (Device) -> Void) {
+        meter = gauge.map { GaugeMeterView(gauge: $0.gauge ?? GaugeSpec(), state: states[$0.entityId]) }
+        padlock = lock.map { lock in ClosureButton(symbol: LockIcon.locked, label: lock.displayName) { onLock(lock) } }
         super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 22))
+
         let label = NSTextField(labelWithString: title)
         label.font = .menuFont(ofSize: 0)
         label.textColor = .disabledControlTextColor
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        meter.setAccessibilityLabel(gauge.displayName)
-        for view in [label, meter] {
+        meter?.setAccessibilityLabel(gauge?.displayName)
+        padlock?.symbolConfiguration = .init(pointSize: 13, weight: .semibold)
+
+        let trailing = NSStackView(views: [padlock, meter].compactMap { $0 })
+        trailing.orientation = .horizontal
+        trailing.spacing = 10
+        for view in [label, trailing] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            meter.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            meter.centerYAnchor.constraint(equalTo: centerYAnchor),
-            meter.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 8),
+            trailing.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            trailing.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trailing.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 8),
         ])
+        if let gauge { updateGauge(state: states[gauge.entityId]) }
+        if let lock { updateLock(state: states[lock.entityId]) }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func update(state: EntityState?) { meter.update(state: state) }
+    func updateGauge(state: EntityState?) { meter?.update(state: state) }
+
+    /// Closed and green when locked, open and orange when not, red when
+    /// jammed; dim and unclickable while it moves or is gone.
+    func updateLock(state: EntityState?) {
+        guard let padlock else { return }
+        let icon = LockIcon(state: state)
+        padlock.image = NSImage(systemSymbolName: icon.symbol, accessibilityDescription: icon.label)
+            ?? NSImage(systemSymbolName: LockIcon.locked, accessibilityDescription: icon.label)
+        padlock.contentTintColor = NSColor(srgbRed: icon.color.red, green: icon.color.green,
+                                           blue: icon.color.blue, alpha: 1)
+        padlock.isEnabled = icon.isEnabled
+        padlock.toolTip = icon.label
+        padlock.setAccessibilityLabel(icon.label)
+    }
 }
