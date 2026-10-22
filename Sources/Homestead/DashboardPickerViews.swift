@@ -87,3 +87,44 @@ final class DashboardRowView: MenuRowView {
         check.contentTintColor = rowTextColor
     }
 }
+
+/// A later dashboard view, folded under its title: clicking it shows that
+/// view's devices below it, in place, the way the picker opens. Collapsed
+/// each time the menu opens.
+final class DisclosureRowView: MenuRowView {
+    private let label = NSTextField(labelWithString: "")
+    private let chevron = NSImageView()
+
+    init(title: String, expanded: Bool, onClick: @escaping () -> Void) {
+        super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 24))
+        self.onClick = onClick
+
+        label.font = .menuFont(ofSize: 0)
+        label.lineBreakMode = .byTruncatingTail
+        label.stringValue = title
+
+        chevron.image = NSImage(systemSymbolName: expanded ? "chevron.down" : "chevron.right",
+                                accessibilityDescription: expanded ? "Collapse" : "Expand")
+        chevron.contentTintColor = .secondaryLabelColor
+
+        for view in [label, chevron] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
+            chevron.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 8),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        label.textColor = rowTextColor
+        chevron.contentTintColor = isRowHighlighted ? .selectedMenuItemTextColor : .secondaryLabelColor
+    }
+}

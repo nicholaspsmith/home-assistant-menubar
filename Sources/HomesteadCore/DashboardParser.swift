@@ -22,15 +22,43 @@ public struct DeviceRef: Equatable, Sendable {
     /// together on the dashboard stay together — and in the same shape — in
     /// the menu.
     public let layout: ButtonLayout?
+    /// The `horizontal-stack` an entity row sits in, so rows the dashboard
+    /// puts side by side share one line in the menu.
+    public let stack: Int?
+    /// When the card shows: its own `visibility`, plus that of any section,
+    /// stack or `conditional` card around it.
+    public let visibility: [VisibilityCondition]
+    /// Set for a `gauge` card: the entity is drawn as an arc meter.
+    public let gauge: GaugeSpec?
+    /// Whether `header` comes from a heading card or a card or section title
+    /// — a heading on screen the gauge can sit in — rather than the view's
+    /// name standing in.
+    public let headed: Bool
+    /// Which view of the dashboard the card is on, and that view's title.
+    public let view: Int
+    public let viewTitle: String
 
     public init(entityId: String, nameOverride: String?, header: String,
-                icon: String? = nil, action: CardAction? = nil, layout: ButtonLayout? = nil) {
+                icon: String? = nil, action: CardAction? = nil, layout: ButtonLayout? = nil,
+                stack: Int? = nil, visibility: [VisibilityCondition] = [], gauge: GaugeSpec? = nil,
+                headed: Bool = false, view: Int = 0, viewTitle: String = "") {
         self.entityId = entityId
         self.nameOverride = nameOverride
         self.header = header
         self.icon = icon
         self.action = action
         self.layout = layout
+        self.stack = stack
+        self.visibility = visibility
+        self.gauge = gauge
+        self.headed = headed
+        self.view = view
+        self.viewTitle = viewTitle
+    }
+
+    /// Every entity a visibility condition reads, for the state subscription.
+    public var conditionEntityIds: Set<String> {
+        visibility.reduce(into: []) { $0.formUnion($1.entityIds) }
     }
 }
 
@@ -79,10 +107,21 @@ public enum DashboardParser {
 
     private static let buttonDomains: Set<String> = ["button", "input_button", "script", "scene"]
 
+    /// What the walk carries down into nested cards.
+    private struct Context {
+        var header: String
+        var headed = false
+        var layout: ButtonLayout?
+        var stack: Int?
+        var conditions: [VisibilityCondition] = []
+    }
+
     public static func references(in config: JSONValue) -> [DeviceRef] {
         var found: [DeviceRef] = []
         var seen: Set<String> = []
         var layouts = 0
+        var view = 0
+        var viewTitle = ""
 
         func append(_ ref: DeviceRef) {
             guard ref.entityId.contains(".") else { return }
@@ -96,18 +135,25 @@ public enum DashboardParser {
 
         /// A card or an `entities` row: either a button (it calls a service
         /// when tapped) or the entity it names.
-        func appendCard(_ fields: [String: JSONValue], header: String, layout: ButtonLayout?) {
+        func appendCard(_ fields: [String: JSONValue], _ context: Context) {
             let entity = fields["entity"]?.string
             if let action = CardAction.parse(fields["tap_action"], cardEntity: entity),
                !action.isOwnToggle(of: entity) {
                 let target = action.entityIds.first ?? entity ?? "action:\(action.domain).\(action.service)"
-                append(DeviceRef(entityId: target, nameOverride: fields["name"]?.string, header: header,
-                                 icon: fields["icon"]?.string, action: action, layout: layout))
+                append(DeviceRef(entityId: target, nameOverride: fields["name"]?.string, header: context.header,
+                                 icon: fields["icon"]?.string, action: action, layout: context.layout,
+                                 visibility: context.conditions, headed: context.headed,
+                                 view: view, viewTitle: viewTitle))
             } else if let entity {
-                // Only buttons are laid out in grids; everything else is a row.
+                // Buttons are laid out in grids; other rows only share a line
+                // when a horizontal stack puts them side by side.
                 let pressable = buttonDomains.contains(String(entity.prefix(while: { $0 != "." })))
-                append(DeviceRef(entityId: entity, nameOverride: fields["name"]?.string, header: header,
-                                 icon: fields["icon"]?.string, layout: pressable ? layout : nil))
+                let gauge = fields["type"]?.string == "gauge" ? GaugeSpec(card: .object(fields)) : nil
+                append(DeviceRef(entityId: entity, nameOverride: fields["name"]?.string, header: context.header,
+                                 icon: fields["icon"]?.string, layout: pressable ? context.layout : nil,
+                                 stack: pressable || gauge != nil ? nil : context.stack,
+                                 visibility: context.conditions, gauge: gauge, headed: context.headed,
+                                 view: view, viewTitle: viewTitle))
             }
         }
 
@@ -119,57 +165,81 @@ public enum DashboardParser {
             return text
         }
 
-        func walk(_ node: JSONValue, header: String, layout: ButtonLayout? = nil, depth: Int = 0) {
+        func walk(_ node: JSONValue, _ context: Context, depth: Int = 0) {
             guard depth < maximumDepth else { return }
             switch node {
             case .array(let elements):
                 // A heading card titles the cards that follow it in the same
                 // list, the way the dashboard draws it.
-                var header = header
+                var context = context
                 for element in elements {
-                    if let text = heading(element) { header = text }
-                    walk(element, header: header, layout: layout, depth: depth + 1)
+                    if let text = heading(element) {
+                        context.header = text
+                        context.headed = true
+                    }
+                    walk(element, context, depth: depth + 1)
                 }
 
             case .object(let fields):
-                let header = fields["title"]?.string.flatMap { $0.isEmpty ? nil : $0 } ?? header
+                var context = context
+                // The view's own title (depth 0) is only the fallback header,
+                // not a heading on screen.
+                if depth > 0, let title = fields["title"]?.string, !title.isEmpty {
+                    context.header = title
+                    context.headed = true
+                }
+                // A card is shown only while its own conditions and those of
+                // everything around it hold. A `conditional` card's
+                // `conditions` govern the card inside it.
+                context.conditions += VisibilityCondition.list(from: fields["visibility"])
+                if fields["type"]?.string == "conditional" {
+                    context.conditions += VisibilityCondition.list(from: fields["conditions"])
+                }
 
-                appendCard(fields, header: header, layout: layout)
+                appendCard(fields, context)
 
                 // A grid card (or a section, which is one) or a horizontal
                 // stack starts a new layout for the cards inside it. HA's grid
                 // card defaults to three columns; a stack is one row.
-                var layout = layout
                 if let cards = fields["cards"]?.array {
                     switch fields["type"]?.string {
                     case "grid":
                         layouts += 1
-                        layout = ButtonLayout(id: layouts, columns: fields["columns"]?.int ?? 3)
+                        context.layout = ButtonLayout(id: layouts, columns: fields["columns"]?.int ?? 3)
+                        context.stack = nil
                     case "horizontal-stack":
                         layouts += 1
-                        layout = ButtonLayout(id: layouts, columns: max(cards.count, 1))
+                        context.layout = ButtonLayout(id: layouts, columns: max(cards.count, 1))
+                        context.stack = layouts
+                    case "vertical-stack":
+                        context.stack = nil
                     default:
                         break
                     }
                 }
 
+                var rowContext = context
+                rowContext.layout = nil
+                rowContext.stack = nil
                 for element in fields["entities"]?.array ?? [] {
                     if let entityId = element.string {
-                        append(DeviceRef(entityId: entityId, nameOverride: nil, header: header))
+                        append(DeviceRef(entityId: entityId, nameOverride: nil, header: context.header,
+                                         visibility: context.conditions, headed: context.headed,
+                                         view: view, viewTitle: viewTitle))
                     } else if let row = element.object, row["entity"] != nil || row["tap_action"] != nil {
-                        appendCard(row, header: header, layout: nil)
+                        appendCard(row, rowContext)
                     } else {
-                        walk(element, header: header, layout: layout, depth: depth + 1)   // nested group rows
+                        walk(element, context, depth: depth + 1)   // nested group rows
                     }
                 }
 
                 for key in containerKeys {
-                    if let child = fields[key] { walk(child, header: header, layout: layout, depth: depth + 1) }
+                    if let child = fields[key] { walk(child, context, depth: depth + 1) }
                 }
                 for key in fields.keys.sorted()
                 where !containerKeys.contains(key) && !skippedKeys.contains(key)
                     && key != "entity" && key != "entities" && key != "name" && key != "title" {
-                    walk(fields[key]!, header: header, layout: layout, depth: depth + 1)
+                    walk(fields[key]!, context, depth: depth + 1)
                 }
 
             default:
@@ -177,8 +247,10 @@ public enum DashboardParser {
             }
         }
 
-        for view in config["views"]?.array ?? [] {
-            walk(view, header: view["title"]?.string ?? fallbackHeader)
+        for (index, config) in (config["views"]?.array ?? []).enumerated() {
+            view = index
+            viewTitle = config["title"]?.string ?? fallbackHeader
+            walk(config, Context(header: viewTitle))
         }
         return found
     }

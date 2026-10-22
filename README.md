@@ -47,7 +47,7 @@ Carol (SoundChain), Iguanamous (VPN & DNS), Armonitor (Monitor Lizard), Volta
 then Gertie, counting only the ones that are running. Skipped when Reduce
 Motion is on.
 
-**Settings ▸ Icon ▸ Dot** replaces the cottage with a plain dot; **Settings ▸ Icon ▸ House** restores it.
+**Icon ▸ Dot** (in the main menu, just below Settings) replaces the cottage with a plain dot; **Icon ▸ House** restores it.
 
 ## Requirements
 
@@ -107,6 +107,18 @@ layout of its own. Cards are walked structurally, not by type, so stacks,
 grids, sections, conditionals and custom cards all work. Heading cards title
 the rows that follow them.
 
+- **Views.** The dashboard's first view is the menu. Each later view is a row
+  with its title and a chevron, folded every time the menu opens; click it to
+  show that view's rows beneath it.
+- **Horizontal stacks** of switches, locks, option lists and sensors share
+  one line, as on the dashboard (e.g. a switch and the option list beside it).
+- **Card visibility** is followed live: a card whose `visibility` (or whose
+  `conditional` card's `conditions`) does not hold is hidden, and appears as
+  soon as it does, without reopening the menu. `state` (`state`/`state_not`,
+  one value or a list), `numeric_state` (`above`/`below`, a number or an
+  entity) and `and`/`or`/`not` are checked; anything else (screen size, user)
+  counts as met.
+
 A card whose tap calls a service (`tap_action: perform-action`, or the older
 `call-service`) becomes a **button**, not a row for the entity it names: fifteen
 tiles on one `remote` entity, each sending a different command, are fifteen
@@ -121,19 +133,20 @@ that entity's normal row.
 | `light` | brightness % | switch, brightness slider, warmth slider in kelvin (tunable white), colour swatch opening the system picker (colour bulbs, once on and reporting a colour) |
 | `switch`, `input_boolean`, `remote`, `automation`, `group` | — | switch |
 | `button`, `input_button`, `script`, `scene` | — | Press / Run / Activate; a script with input fields shows **Run…**, which closes the menu and opens a small form for them (text, password, choice, number, checkbox), then runs it with what you entered |
-| `lock` | Locked/Unlocked/Locking/Unlocking/Jammed/Open | one button that does the opposite: **Lock**, or **Unlock**, which asks inline first (**Confirm?**, then a second press); off while the lock is moving |
+| `lock` | Locked/Unlocked/Locking/Unlocking/Jammed/Open | one button that does the opposite, **Lock** or **Unlock**, on the first press; off while the lock is moving. The only lock in a section with a heading is a **padlock on the heading** instead: click it to unlock (locked, green, closed) or lock (unlocked or open, red, open); red with a warning badge when jammed (a click locks again); orange and unclickable while moving, grey and unclickable when unavailable. A section with two or more locks keeps them as rows |
 | `input_select`, `select` | — | the current option as a button: click it to expand the options under the row, click one to choose it |
 | `fan` | speed % | switch, speed slider snapped to the fan's own step |
 | `cover` | Open/Closed/Opening, position | open / stop / close, position slider where supported (shown even while closed) |
 | `climate`, `water_heater` | reading · current action (Heating, Cooling, Idle) | mode picker from the entity's `hvac_modes` (in place of the switch); the target, or both ends of a heat/cool range, as buttons: click one, then ▲▼ step it |
 | `media_player` | what's playing, or the source | power, volume slider or volume ▼ mute ▲, ⏮ ⏯ ⏭ — each only if the player supports it |
 | `sensor`, `binary_sensor` | value worded as HA does (OK/Problem, 6 h ago, 14 d) | read-only; hidden unless **Settings ▸ Show Sensors** is ticked |
+| any entity on a `gauge` card | a small arc filled between the card's `min` and `max` (0–100 by default), and the value | read-only; always shown. At the end of its section's heading when the section has one, else a row of its own. Coloured by the card's `severity` with Home Assistant's colours, blending smoothly from green through yellow to red; blue with no severity |
 
 Anything else (to-do lists, cameras, weather cards) is skipped.
 
 ### Settings ▸
 
-The menu ends with **Settings ▸** and **Quit Homestead** (⌘Q). The dashboard
+The menu ends with **Settings ▸**, **Icon ▸** (House or Dot) and **Quit Homestead** (⌘Q). The dashboard
 picker, status rows and device controls stay at the top level; everything
 below is in the Settings submenu, which StatusItemKit's `SettingsMenu` builds
 (Homestead supplies the first two groups).
@@ -144,7 +157,6 @@ below is in the Settings submenu, which StatusItemKit's `SettingsMenu` builds
 | **Weather ▸** | Weather entity for the icon: Automatic (prefers `weather.forecast_home`), a specific entity, or None. Absent when HA has no weather entity |
 | **Dashboards…** | Which dashboards the picker offers, and their order |
 | **Connection…** | Server address, sign in / sign out (shown when signed in) |
-| **Icon ▸** | House or Dot |
 | **Start at Login** | Registers the app with `SMAppService` |
 | **Version x.y.z** | The running build (grey) |
 
@@ -199,7 +211,28 @@ Keychain, set it to `false` and sign in again in **Settings ▸ Connection…**.
   clicked while a menu is tracking, and a submenu would dismiss the menu on
   selection. View-based rows do neither.
 - **Option lists expand inside the menu too**, for the same reason: an
-  `input_select` or `select` row's options are view-based rows under it.
+  `input_select` or `select` row's options are view-based rows under it. So
+  do later dashboard views.
+- **Gauges reuse the menu-bar icon's arc** (`MeterIcon.arc` in
+  StatusItemKit, the Icon ▸ Arc style). Severity colours are Home
+  Assistant's default theme's `--success-color` `#43a047`, `--warning-color`
+  `#ffa600` and `--error-color` `#db4437` (`--info-color` `#039be5` without
+  one), the colours its gauge card uses; values between thresholds blend
+  linearly in sRGB.
+- **A heading carries its section's padlock and battery**, padlock first, so
+  a section that is one door reads as one line: its name, whether it is
+  locked, how much battery is left. Both sit in fixed-width columns against
+  the trailing edge (the value right-aligned in a slot that fits "100%" in
+  monospaced digits, the padlock drawn on the arc's 18 pt canvas), and a
+  heading missing one keeps its slot empty, so every heading's padlocks and
+  arcs line up. Lock colours are exactly Home
+  Assistant's `--state-lock-*-color` defaults: `--green-color` `#4caf50`
+  locked; `--red-color` `#f44336` unlocked, open and jammed;
+  `--orange-color` `#ff9800` locking, unlocking and opening; and
+  `--state-unavailable-color` (`--disabled-text-color` `#bdbdbd`) when
+  unavailable.
+- **Visibility conditions can read entities no row shows**, so those are
+  added to the dashboard's state subscription.
 - **A script's form is a window.** A tracking menu keeps key events to
   itself, so nothing in it can be typed into. Which scripts take input comes
   from `get_services`, read on connect, on a dashboard switch and when a

@@ -24,8 +24,9 @@ final class DashboardParserTests: XCTestCase {
         """#)
 
         XCTAssertEqual(refs, [
-            DeviceRef(entityId: "light.ceiling", nameOverride: nil, header: "Living Room"),
-            DeviceRef(entityId: "fan.ceiling", nameOverride: "Fan", header: "Living Room"),
+            DeviceRef(entityId: "light.ceiling", nameOverride: nil, header: "Living Room", headed: true, viewTitle: "Home"),
+            DeviceRef(entityId: "fan.ceiling", nameOverride: "Fan", header: "Living Room", headed: true,
+                      viewTitle: "Home"),
         ])
     }
 
@@ -34,12 +35,13 @@ final class DashboardParserTests: XCTestCase {
         {"views":[{"title":"Home","cards":[{"type":"tile","entity":"switch.heater","name":"Heater"}]}]}
         """#)
 
-        XCTAssertEqual(refs, [DeviceRef(entityId: "switch.heater", nameOverride: "Heater", header: "Home")])
+        XCTAssertEqual(refs, [DeviceRef(entityId: "switch.heater", nameOverride: "Heater", header: "Home",
+                                        viewTitle: "Home")])
     }
 
     func testFallsBackToDevicesWhenNothingIsTitled() throws {
         let refs = try parse(#"{"views":[{"cards":[{"type":"tile","entity":"light.hall"}]}]}"#)
-        XCTAssertEqual(refs, [DeviceRef(entityId: "light.hall", nameOverride: nil, header: "Devices")])
+        XCTAssertEqual(refs, [DeviceRef(entityId: "light.hall", nameOverride: nil, header: "Devices", viewTitle: "Devices")])
     }
 
     func testRecursesThroughStacksAndGrids() throws {
@@ -67,8 +69,8 @@ final class DashboardParserTests: XCTestCase {
         """#)
 
         XCTAssertEqual(refs, [
-            DeviceRef(entityId: "light.desk", nameOverride: nil, header: "Office"),
-            DeviceRef(entityId: "light.spare", nameOverride: nil, header: "Home"),
+            DeviceRef(entityId: "light.desk", nameOverride: nil, header: "Office", headed: true, viewTitle: "Home"),
+            DeviceRef(entityId: "light.spare", nameOverride: nil, header: "Home", viewTitle: "Home"),
         ])
     }
 
@@ -104,7 +106,7 @@ final class DashboardParserTests: XCTestCase {
         ]}
         """#)
 
-        XCTAssertEqual(refs, [DeviceRef(entityId: "light.a", nameOverride: "First", header: "Home")])
+        XCTAssertEqual(refs, [DeviceRef(entityId: "light.a", nameOverride: "First", header: "Home", viewTitle: "Home")])
     }
 
     func testMultipleViewsFlattenInViewOrder() throws {

@@ -32,6 +32,12 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// The select whose options are showing under its row, if any. Reset with
     /// the picker when the menu closes.
     private var expandedSelect: String?
+    /// The dashboard views after the first whose devices are showing. Each
+    /// is folded under its title until clicked; reset when the menu closes.
+    private var expandedViews: Set<Int> = []
+    /// For each entity a visibility condition reads, the rows to re-check
+    /// when it changes — a toggle that shows or hides the select beside it.
+    private var visibilityDependents: [String: Set<String>] = [:]
     /// The Run form of a script that asks for input, while it is open.
     private var scriptForm: ScriptFormWindowController?
     /// The light the shared colour panel is currently driving.
@@ -52,11 +58,13 @@ final class MenuController: NSObject, NSWindowDelegate {
     func menuClosed() {
         pickerExpanded = false
         expandedSelect = nil
+        expandedViews = []
     }
 
     func build(_ menu: NSMenu) {
         self.menu = menu
         updaters.removeAll()
+        visibilityDependents.removeAll()
 
         let snapshot = model.snapshot
 
@@ -77,36 +85,30 @@ final class MenuController: NSObject, NSWindowDelegate {
             menu.addItem(empty)
         }
 
-        for group in pickerExpanded ? [] : snapshot.groups {
-            let header = NSMenuItem(title: group.title.uppercased(), action: nil, keyEquivalent: "")
-            header.isEnabled = false
-            menu.addItem(header)
+        let groups = pickerExpanded ? [] : snapshot.groups
+        for group in groups where group.view == 0 {
+            addGroup(group, to: menu, snapshot: snapshot)
+        }
 
-            // Buttons from one dashboard grid share a grid here, in its
-            // columns; a lone one is a row with a Press button.
-            var index = group.devices.startIndex
-            while index < group.devices.endIndex {
-                let device = group.devices[index]
-                // A script that opens a form is a row of its own, where its
-                // Run… can say so.
-                guard device.kind == .button, formFields(for: device, snapshot: snapshot) == nil else {
-                    if device.kind == .button {
-                        addButtonRow(device, to: menu, snapshot: snapshot)
-                    } else {
-                        addDevice(device, to: menu, snapshot: snapshot)
-                    }
-                    index += 1
-                    continue
-                }
-                let run = Array(group.devices[index...].prefix {
-                    $0.kind == .button && $0.layout == device.layout && formFields(for: $0, snapshot: snapshot) == nil
-                })
-                index += run.count
-                if run.count == 1 {
-                    addButtonRow(device, to: menu, snapshot: snapshot)
-                } else {
-                    addButtonGrid(run, to: menu, snapshot: snapshot)
-                }
+        // Later views fold away under their titles, like the dashboard's
+        // other tabs, and open in place like the picker.
+        var views: [(index: Int, title: String)] = []
+        for group in groups where group.view > 0 && !views.contains(where: { $0.index == group.view }) {
+            views.append((group.view, group.viewTitle))
+        }
+        for view in views {
+            if menu.items.last?.isSeparatorItem == false { menu.addItem(.separator()) }
+            let expanded = expandedViews.contains(view.index)
+            let item = NSMenuItem()
+            item.view = DisclosureRowView(title: view.title, expanded: expanded) { [weak self] in
+                guard let self else { return }
+                if self.expandedViews.remove(view.index) == nil { self.expandedViews.insert(view.index) }
+                self.rebuildIfOpen()
+            }
+            menu.addItem(item)
+            guard expanded else { continue }
+            for group in groups where group.view == view.index {
+                addGroup(group, to: menu, snapshot: snapshot)
             }
         }
 
@@ -114,27 +116,94 @@ final class MenuController: NSObject, NSWindowDelegate {
         addFooter(menu)
     }
 
+    /// A group's heading, then its devices: rows, button grids (buttons from
+    /// one dashboard grid keep its columns; a lone one is a row with a Press
+    /// button) and lines of rows a horizontal stack put side by side.
+    private func addGroup(_ group: DeviceGroup, to menu: NSMenu, snapshot: Snapshot) {
+        if group.headingGauge != nil || group.headingLock != nil {
+            // The section's padlock and battery sit at the end of its name.
+            let heading = HeadingView(title: group.title.uppercased(), gauge: group.headingGauge,
+                                      lock: group.headingLock, states: snapshot.states) { [weak self] lock in
+                guard let self else { return }
+                self.model.lock(lock, LockIcon(state: self.model.state(for: lock.entityId)).action)
+            }
+            let item = NSMenuItem()
+            item.view = heading
+            menu.addItem(item)
+            if let gauge = group.headingGauge {
+                updaters[gauge.entityId, default: []].append { heading.updateGauge(state: $0) }
+            }
+            if let lock = group.headingLock {
+                updaters[lock.entityId, default: []].append { heading.updateLock(state: $0) }
+            }
+        } else {
+            let header = NSMenuItem(title: group.title.uppercased(), action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            menu.addItem(header)
+        }
+
+        // A script that opens a form is a row of its own, where its Run… can
+        // say so.
+        let runs = MenuLayout.runs(group.devices) { [unowned self] in formFields(for: $0, snapshot: snapshot) != nil }
+        for run in runs {
+            switch run {
+            case .row(let device) where device.kind == .button:
+                addButtonRow(device, to: menu, snapshot: snapshot)
+            case .row(let device):
+                addDevice(device, to: menu, snapshot: snapshot)
+            case .buttonGrid(let devices):
+                addButtonGrid(devices, to: menu, snapshot: snapshot)
+            case .line(let devices):
+                addLine(devices, to: menu, snapshot: snapshot)
+            }
+        }
+    }
+
     /// Adds a menu item showing `view`, kept current from `entityId`'s state:
     /// `update` refreshes the view and `hidden` decides whether it shows at all
     /// (an open NSMenu re-lays out when an item's `isHidden` changes).
+    ///
+    /// - Parameter device: the row's device, whose card `visibility` also
+    ///   hides it, re-checked whenever an entity the conditions read changes.
     @discardableResult
     private func addItem(_ view: NSView, to menu: NSMenu, entityId: String, state: EntityState?,
+                         device: Device? = nil,
                          hidden: ((EntityState?) -> Bool)? = nil,
                          update: ((EntityState?) -> Void)? = nil) -> NSMenuItem {
         let item = NSMenuItem()
         item.view = view
-        item.isHidden = hidden?(state) ?? false
+        let conditional = device.map { !$0.visibility.isEmpty } ?? false
+        item.isHidden = (hidden?(state) ?? false) || !isVisible(device)
         menu.addItem(item)
-        updaters[entityId, default: []].append { state in
+        if let device { watchVisibility(of: device) }
+        updaters[entityId, default: []].append { [weak self] state in
             update?(state)
-            if let hidden { item.isHidden = hidden(state) }
+            guard hidden != nil || conditional else { return }
+            item.isHidden = (hidden?(state) ?? false) || !(self?.isVisible(device) ?? true)
         }
         return item
     }
 
+    /// Whether a device's card conditions hold right now. No device, or no
+    /// conditions, is always shown.
+    private func isVisible(_ device: Device?) -> Bool {
+        guard let device, !device.visibility.isEmpty else { return true }
+        return VisibilityCondition.allMet(device.visibility) { [model] in model.state(for: $0) }
+    }
+
+    private func watchVisibility(of device: Device) {
+        for condition in device.visibility {
+            for entityId in condition.entityIds where entityId != device.entityId {
+                visibilityDependents[entityId, default: []].insert(device.entityId)
+            }
+        }
+    }
+
     private static func isOff(_ state: EntityState?) -> Bool { !(state?.isOn ?? false) }
 
-    private func addDevice(_ device: Device, to menu: NSMenu, snapshot: Snapshot) {
+    /// A device's own row — name, value and trailing control — and what keeps
+    /// it current. Shared by full rows and by cells of a shared line.
+    private func makeRow(_ device: Device, snapshot: Snapshot) -> (row: DeviceRowView, update: (EntityState?) -> Void) {
         let state = snapshot.states[device.entityId]
         let unit = snapshot.temperatureUnit
         let modes = device.domain == "climate" ? ThermostatModeView.modes(of: state) : []
@@ -167,6 +236,10 @@ final class MenuController: NSObject, NSWindowDelegate {
             }
             accessory = button
             updateAccessory = button.update(state:)
+        case .gauge:
+            let meter = GaugeMeterView(gauge: device.gauge ?? GaugeSpec(), state: state)
+            accessory = meter
+            updateAccessory = meter.update(state:)
         default:
             break
         }
@@ -181,10 +254,18 @@ final class MenuController: NSObject, NSWindowDelegate {
             onToggle: { [weak self] on in self?.toggled(device, on: on) },
             onPickColor: canPickColor ? { [weak self] in self?.pickColor(for: device) } : nil
         )
-        addItem(row, to: menu, entityId: device.entityId, state: state) { state in
+        return (row, { state in
             row.update(state: state)
             updateAccessory?(state)
-        }
+        })
+    }
+
+    private func addDevice(_ device: Device, to menu: NSMenu, snapshot: Snapshot) {
+        let state = snapshot.states[device.entityId]
+        let unit = snapshot.temperatureUnit
+        let modes = device.domain == "climate" ? ThermostatModeView.modes(of: state) : []
+        let (row, updateRow) = makeRow(device, snapshot: snapshot)
+        addItem(row, to: menu, entityId: device.entityId, state: state, device: device, update: updateRow)
 
         switch device.kind {
         case .mediaPlayer:
@@ -195,12 +276,13 @@ final class MenuController: NSObject, NSWindowDelegate {
                 let modeView = ThermostatModeView(modes: modes, state: state) { [weak self] mode in
                     self?.model.setHVACMode(device, mode)
                 }
-                addItem(modeView, to: menu, entityId: device.entityId, state: state, update: modeView.update(state:))
+                addItem(modeView, to: menu, entityId: device.entityId, state: state, device: device,
+                        update: modeView.update(state:))
             }
             let target = ThermostatTargetView(state: state, unit: unit) { [weak self] targets in
                 self?.model.setTargets(device, targets)
             }
-            addItem(target, to: menu, entityId: device.entityId, state: state,
+            addItem(target, to: menu, entityId: device.entityId, state: state, device: device,
                     hidden: { !ThermostatTargetView.hasTargets($0) }, update: target.update(state:))
 
         case .light, .fan, .cover:
@@ -222,7 +304,7 @@ final class MenuController: NSObject, NSWindowDelegate {
                                          } : nil) { [weak self] value in
                 self?.model.setLevel(device, fraction: value)
             }
-            addItem(slider, to: menu, entityId: device.entityId, state: state, hidden: hidden) { state in
+            addItem(slider, to: menu, entityId: device.entityId, state: state, device: device, hidden: hidden) { state in
                 slider.update(fraction: Self.fraction(device: device, state: state))
             }
 
@@ -235,7 +317,8 @@ final class MenuController: NSObject, NSWindowDelegate {
                                          caption: Self.warmthCaption(state: state)) { [weak self] value in
                 self?.model.setColorTemperature(device, fraction: value)
             }
-            addItem(warmth, to: menu, entityId: device.entityId, state: state, hidden: Self.isOff) { state in
+            addItem(warmth, to: menu, entityId: device.entityId, state: state, device: device,
+                    hidden: Self.isOff) { state in
                 warmth.update(fraction: Self.warmthFraction(state: state), caption: Self.warmthCaption(state: state))
             }
 
@@ -243,8 +326,45 @@ final class MenuController: NSObject, NSWindowDelegate {
             guard expandedSelect == device.entityId else { return }
             addOptions(of: device, state: state, to: menu)
 
-        case .toggle, .sensor, .button, .lock:
+        case .toggle, .sensor, .button, .lock, .gauge:
             break
+        }
+    }
+
+    /// Rows a horizontal stack puts side by side, as cells of one line: a
+    /// toggle and the select beside it, say. A cell whose card is hidden
+    /// drops out and the others widen; the line goes when all of them have.
+    /// An expanded select's options still open below the line.
+    private func addLine(_ devices: [Device], to menu: NSMenu, snapshot: Snapshot) {
+        let cells = devices.map { makeRow($0, snapshot: snapshot) }
+        let line = NSStackView(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 26))
+        line.orientation = .horizontal
+        line.distribution = .fillEqually
+        line.spacing = 0
+        for cell in cells {
+            line.addArrangedSubview(cell.row)
+            cell.row.heightAnchor.constraint(equalToConstant: 26).isActive = true
+        }
+        let item = NSMenuItem()
+        item.view = line
+        menu.addItem(item)
+
+        let showCells = { [weak self] in
+            guard let self else { return }
+            for (device, cell) in zip(devices, cells) { cell.row.isHidden = !self.isVisible(device) }
+            item.isHidden = cells.allSatisfy { $0.row.isHidden }
+        }
+        showCells()
+        for (device, cell) in zip(devices, cells) {
+            watchVisibility(of: device)
+            updaters[device.entityId, default: []].append { state in
+                cell.update(state)
+                showCells()
+            }
+        }
+
+        for device in devices where device.kind == .select && expandedSelect == device.entityId {
+            addOptions(of: device, state: snapshot.states[device.entityId], to: menu)
         }
     }
 
@@ -252,14 +372,13 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// so choosing one keeps the menu open, then the list folds away.
     private func addOptions(of device: Device, state: EntityState?, to menu: NSMenu) {
         for option in SelectOptions.options(of: state) {
-            let item = NSMenuItem()
-            item.view = DashboardRowView(title: option, isCurrent: option == state?.state) { [weak self] in
+            let row = DashboardRowView(title: option, isCurrent: option == state?.state) { [weak self] in
                 guard let self else { return }
                 self.expandedSelect = nil
                 self.model.selectOption(device, option)
                 self.rebuildIfOpen()
             }
-            menu.addItem(item)
+            addItem(row, to: menu, entityId: device.entityId, state: state, device: device)
         }
     }
 
@@ -292,10 +411,10 @@ final class MenuController: NSObject, NSWindowDelegate {
             }
         }
         let row = DeviceRowView(device: device, state: state, showsSwitch: false, accessory: press, onToggle: { _ in })
-        addItem(row, to: menu, entityId: device.entityId, state: state) { state in
+        addItem(row, to: menu, entityId: device.entityId, state: state, device: device, update: { state in
             row.update(state: state)
             press.isEnabled = ButtonAvailability.isAvailable(state)
-        }
+        })
         press.isEnabled = ButtonAvailability.isAvailable(state)
     }
 
@@ -320,7 +439,8 @@ final class MenuController: NSObject, NSWindowDelegate {
                                          fraction: MediaCapabilities.volume(of: state) ?? 0) { [weak self] value in
                 self?.model.setLevel(device, fraction: value)
             }
-            addItem(slider, to: menu, entityId: device.entityId, state: state, hidden: Self.isOff) { state in
+            addItem(slider, to: menu, entityId: device.entityId, state: state, device: device,
+                    hidden: Self.isOff) { state in
                 slider.update(fraction: MediaCapabilities.volume(of: state) ?? 0)
             }
         }
@@ -329,7 +449,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         let transport = TransportRowView(state: state) { [weak self] control in
             self?.model.transport(device, control)
         }
-        addItem(transport, to: menu, entityId: device.entityId, state: state,
+        addItem(transport, to: menu, entityId: device.entityId, state: state, device: device,
                 hidden: Self.isOff, update: transport.update(state:))
     }
 
@@ -395,7 +515,11 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// Patch only the rows whose entities changed; rebuilding the whole menu
     /// under the cursor would fight whatever the user is doing in it.
     func apply(entities: Set<String>) {
-        for entityId in entities {
+        // A row whose card conditions read a changed entity is re-checked
+        // too, so it appears or goes without reopening the menu.
+        var touched = entities
+        for entityId in entities { touched.formUnion(visibilityDependents[entityId] ?? []) }
+        for entityId in touched {
             let state = model.state(for: entityId)
             updaters[entityId]?.forEach { $0(state) }
         }
@@ -455,7 +579,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         case .fan: return LevelMath.fraction(percentage: state.attributes["percentage"])
         case .cover: return LevelMath.fraction(percentage: state.attributes["current_position"])
         case .mediaPlayer: return MediaCapabilities.volume(of: state) ?? 0
-        case .thermostat, .toggle, .sensor, .button, .lock, .select: return 0
+        case .thermostat, .toggle, .sensor, .button, .lock, .select, .gauge: return 0
         }
     }
 
