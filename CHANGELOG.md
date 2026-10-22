@@ -8,7 +8,7 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
-## [1.16.0] - 2026-10-20
+## [1.17.0] - 2026-10-21
 
 - Gauge cards show as a small arc meter with their value, coloured like Home Assistant's gauge (green to yellow to red, blending smoothly), at the end of their section's heading — a lock's battery beside the lock's name.
 - Rows the dashboard puts side by side in a horizontal stack share one line in the menu.
@@ -16,7 +16,10 @@ Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 - Lock and Unlock both act on the first press.
 - A section's only lock becomes a padlock on its heading, beside the battery: coloured as Home Assistant colours locks — green and closed when locked, red and open when not, red when jammed, orange while moving; click it to lock or unlock.
 - A dashboard's later views fold under their titles; click one to show its rows.
-- Icon ▸ moves out of Settings into the main menu, just below Settings.
+
+## [1.16.0] - 2026-10-20
+
+- The Icon picker has moved from the Settings submenu to the main menu, appearing directly below the Settings item and above Quit.
 
 ## [1.15.0] - 2026-10-20
 
