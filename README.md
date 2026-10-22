@@ -47,7 +47,7 @@ Carol (SoundChain), Iguanamous (VPN & DNS), Armonitor (Monitor Lizard), Volta
 then Gertie, counting only the ones that are running. Skipped when Reduce
 Motion is on.
 
-**Settings ▸ Icon ▸ Dot** replaces the cottage with a plain dot; **Settings ▸ Icon ▸ House** restores it.
+**Icon ▸ Dot** (in the main menu, just below Settings) replaces the cottage with a plain dot; **Icon ▸ House** restores it.
 
 ## Requirements
 
@@ -146,7 +146,7 @@ Anything else (to-do lists, cameras, weather cards) is skipped.
 
 ### Settings ▸
 
-The menu ends with **Settings ▸** and **Quit Homestead** (⌘Q). The dashboard
+The menu ends with **Settings ▸**, **Icon ▸** (House or Dot) and **Quit Homestead** (⌘Q). The dashboard
 picker, status rows and device controls stay at the top level; everything
 below is in the Settings submenu, which StatusItemKit's `SettingsMenu` builds
 (Homestead supplies the first two groups).
@@ -157,7 +157,6 @@ below is in the Settings submenu, which StatusItemKit's `SettingsMenu` builds
 | **Weather ▸** | Weather entity for the icon: Automatic (prefers `weather.forecast_home`), a specific entity, or None. Absent when HA has no weather entity |
 | **Dashboards…** | Which dashboards the picker offers, and their order |
 | **Connection…** | Server address, sign in / sign out (shown when signed in) |
-| **Icon ▸** | House or Dot |
 | **Start at Login** | Registers the app with `SMAppService` |
 | **Version x.y.z** | The running build (grey) |
 

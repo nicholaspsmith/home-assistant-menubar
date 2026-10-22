@@ -16,6 +16,7 @@ Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 - Lock and Unlock both act on the first press.
 - A section's only lock becomes a padlock on its heading, beside the battery: coloured as Home Assistant colours locks — green and closed when locked, red and open when not, red when jammed, orange while moving; click it to lock or unlock.
 - A dashboard's later views fold under their titles; click one to show its rows.
+- Icon ▸ moves out of Settings into the main menu, just below Settings.
 
 ## [1.15.0] - 2026-10-20
 

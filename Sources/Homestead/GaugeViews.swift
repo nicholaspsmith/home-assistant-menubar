@@ -9,7 +9,7 @@ import HomesteadCore
 import StatusItemKit
 
 /// A dashboard gauge as a small arc meter and its value — the same arc the
-/// menu-bar icon draws in Settings ▸ Icon ▸ Arc (`MeterIcon.arc`), filled to
+/// menu-bar icon draws in Icon ▸ Arc (`MeterIcon.arc`), filled to
 /// the value's place between the card's min and max and coloured by its
 /// severity the way Home Assistant colours the card.
 final class GaugeMeterView: NSStackView {

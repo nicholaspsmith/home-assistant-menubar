@@ -117,8 +117,8 @@ final class App: NSObject, NSApplicationDelegate {
         menuController.build(menu)
     }
 
-    /// The foot of the menu: Settings ▸ (this app's preferences, then the
-    /// shared Icon ▸, Start at Login and Version), then Quit.
+    /// The foot of the menu: Settings ▸ (this app's preferences, then Start
+    /// at Login and Version), the shared Icon ▸ below it, then Quit.
     func addFooter(to menu: NSMenu) {
         SettingsMenu.addFooter(to: menu, appName: "Homestead", items: { submenu in
             addSettingsItems(to: submenu)
