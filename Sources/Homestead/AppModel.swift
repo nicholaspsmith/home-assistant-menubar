@@ -64,6 +64,10 @@ final class AppModel {
     private var reconnectTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
+    private var wakeObserver: NSObjectProtocol?
+    /// An in-flight ping after a network change or wake, so a burst of path
+    /// updates sends one.
+    private var livenessCheck: Task<Void, Never>?
     /// Every dashboard Home Assistant reports, before the visibility filter —
     /// the Dashboards window needs the full list to tick from.
     private(set) var allDashboards: [DashboardListing] = []
@@ -105,6 +109,7 @@ final class AppModel {
 
     func start() {
         startPathMonitor()
+        watchForWake()
         reloadConfiguration()
     }
 
@@ -373,10 +378,15 @@ final class AppModel {
 
         Task {
             do {
-                try await client.connect(url: url, token: token)
+                // Wired before the handshake: the socket can die the moment
+                // the reader starts, and a drop nobody hears never reconnects.
                 await client.setOnClose { [weak self] reason in
-                    Task { @MainActor in self?.handleDrop(reason: reason) }
+                    Task { @MainActor in
+                        guard let self, self.client === client else { return }
+                        self.handleDrop(reason: reason)
+                    }
                 }
+                try await client.connect(url: url, token: token)
                 reconnectAttempt = 0
                 update { $0.connection = .connected }
                 await loadTemperatureUnit()
@@ -384,10 +394,15 @@ final class AppModel {
                 try await loadDashboards()
                 await loadScriptFields()
                 await watchScriptServices()
-            } catch HAClientError.authInvalid {
-                update { $0.connection = .authFailed }
             } catch {
-                handleDrop(reason: error.localizedDescription)
+                // A reload replaced this client while it was connecting; the
+                // new one owns the connection state.
+                guard self.client === client else { return }
+                if case HAClientError.authInvalid = error {
+                    update { $0.connection = .authFailed }
+                } else {
+                    handleDrop(reason: error.localizedDescription)
+                }
             }
         }
     }
@@ -662,6 +677,9 @@ final class AppModel {
     }
 
     private func handleDrop(reason: String) {
+        // Notice, not info: info is not kept, and a drop is what to look for
+        // when the menu stopped answering.
+        log.notice("connection dropped: \(reason, privacy: .public)")
         client = nil
         subscriptionId = nil
         update { $0.connection = .unreachable(reason) }
@@ -694,11 +712,44 @@ final class AppModel {
             guard path.status == .satisfied else { return }
             Task { @MainActor in
                 guard let self else { return }
-                if case .unreachable = self.snapshot.connection { self.retryNow() }
+                switch self.snapshot.connection {
+                case .unreachable: self.retryNow()
+                // The route the socket used may be gone, and a dead socket
+                // need not say so: ask Home Assistant.
+                case .connected: self.checkLiveness()
+                default: break
+                }
             }
         }
         monitor.start(queue: DispatchQueue(label: "com.nicholaspsmith.Homestead.path"))
         pathMonitor = monitor
+    }
+
+    /// After sleep the server may have closed the socket long ago without the
+    /// Mac hearing it.
+    private func watchForWake() {
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                switch self.snapshot.connection {
+                case .connected: self.checkLiveness()
+                case .unreachable: self.retryNow()
+                default: break
+                }
+            }
+        }
+    }
+
+    /// A ping with a short fuse; no pong closes the connection, and the drop
+    /// reconnects.
+    private func checkLiveness() {
+        guard livenessCheck == nil, let client else { return }
+        livenessCheck = Task { [weak self] in
+            await client.checkAlive(timeout: 5)
+            self?.livenessCheck = nil
+        }
     }
 
     private func update(_ change: (inout Snapshot) -> Void) {

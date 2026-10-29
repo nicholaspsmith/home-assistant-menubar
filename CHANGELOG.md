@@ -8,6 +8,16 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.17.1] - 2026-10-29
+
+- Homestead reconnects on its own when the connection to Home Assistant dies
+  silently (a VPN switching routes, sleep): it pings Home Assistant every 30
+  seconds and right after a network change or wake, and a write the socket
+  refuses now counts as a drop. Before, the menu could sit there looking
+  connected while nothing worked, until you quit and reopened it.
+- A server that accepts the connection but never answers no longer leaves the
+  menu on Connecting…: the handshake gives up after 15 seconds and retries.
+
 ## [1.17.0] - 2026-10-21
 
 - Gauge cards show as a small arc meter with their value, coloured like Home Assistant's gauge (green to yellow to red, blending smoothly), at the end of their section's heading — a lock's battery beside the lock's name.

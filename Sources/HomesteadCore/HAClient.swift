@@ -11,23 +11,40 @@ public enum HAClientError: Error, Equatable {
     case command(HAError)
     case closed
     case notConnected
+    case timedOut
 }
 
 /// Speaks the Home Assistant WebSocket API: one auth handshake, then commands
 /// correlated by id and subscriptions that keep delivering events under the id
 /// they were created with.
+///
+/// A dead socket does not always say so: after a VPN takes away the local
+/// address, `URLSessionWebSocketTask.receive()` can stay blocked forever while
+/// writes fail. So a refused write closes the connection too, and a heartbeat
+/// ping that goes unanswered closes a socket that has gone quiet.
 public actor HAClient {
     private let transport: HATransport
+    private let heartbeatInterval: TimeInterval
+    private let pongTimeout: TimeInterval
+    private let handshakeTimeout: TimeInterval
     private var nextId = 1
     private var pending: [Int: CheckedContinuation<JSONValue, Error>] = [:]
     private var subscriptions: [Int: @Sendable (JSONValue) -> Void] = [:]
     /// Commands whose caller wants the reply frame as text (`sendForFrameText`).
     private var textReplies: Set<Int> = []
     private var readerTask: Task<Void, Never>?
+    private var heartbeatTask: Task<Void, Never>?
+    private var handshakeTimedOut = false
     private var onClose: (@Sendable (String) -> Void)?
 
-    public init(transport: HATransport) {
+    public init(transport: HATransport,
+                heartbeatInterval: TimeInterval = 30,
+                pongTimeout: TimeInterval = 10,
+                handshakeTimeout: TimeInterval = 15) {
         self.transport = transport
+        self.heartbeatInterval = heartbeatInterval
+        self.pongTimeout = pongTimeout
+        self.handshakeTimeout = handshakeTimeout
     }
 
     /// Called when the socket drops for any reason other than `disconnect()`.
@@ -36,6 +53,29 @@ public actor HAClient {
     }
 
     public func connect(url: URL, token: String) async throws {
+        // A server that accepts the socket and then says nothing would leave
+        // the menu on Connecting… for good; closing the transport unblocks
+        // the receive below.
+        handshakeTimedOut = false
+        let watchdog = Task { [weak self, handshakeTimeout] in
+            try? await Task.sleep(nanoseconds: UInt64(handshakeTimeout * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.timeOutHandshake()
+        }
+        defer { watchdog.cancel() }
+        do {
+            try await handshake(url: url, token: token)
+        } catch where handshakeTimedOut {
+            throw HAClientError.timedOut
+        }
+    }
+
+    private func timeOutHandshake() {
+        handshakeTimedOut = true
+        transport.close()
+    }
+
+    private func handshake(url: URL, token: String) async throws {
         try await transport.connect(to: url)
 
         // The handshake is read inline: no reader task runs yet, so these
@@ -51,6 +91,7 @@ public actor HAClient {
                 try await transport.send(String(decoding: try frame.encodedData(), as: UTF8.self))
             case .authOK:
                 startReader()
+                startHeartbeat()
                 return
             case .authInvalid(let reason):
                 transport.close()
@@ -64,6 +105,8 @@ public actor HAClient {
     public func disconnect() {
         readerTask?.cancel()
         readerTask = nil
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
         onClose = nil
         failAllPending(with: HAClientError.closed)
         subscriptions.removeAll()
@@ -112,6 +155,31 @@ public actor HAClient {
         return id
     }
 
+    /// Ping Home Assistant. No pong within `timeout` (the heartbeat's own
+    /// timeout by default) closes the connection and reports it through
+    /// `onClose`, so the caller reconnects.
+    /// - Returns: whether the pong came back.
+    @discardableResult
+    public func checkAlive(timeout: TimeInterval? = nil) async -> Bool {
+        guard readerTask != nil else { return false }
+        let id = claimId()
+        let watchdog = Task { [weak self, wait = timeout ?? pongTimeout] in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.drop(reason: "Home Assistant stopped answering")
+        }
+        defer { watchdog.cancel() }
+        do {
+            _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<JSONValue, Error>) in
+                pending[id] = continuation
+                Task { await self.write(["type": .string("ping")], id: id) }
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     public func unsubscribe(_ subscriptionId: Int) async {
         subscriptions.removeValue(forKey: subscriptionId)
         _ = try? await send([
@@ -129,14 +197,24 @@ public actor HAClient {
 
     /// Writes the command, failing its waiter if the socket refuses it.
     private func write(_ payload: [String: JSONValue], id: Int) async {
+        let text: String
         do {
             var body = payload
             body["id"] = .number(Double(id))
-            let text = String(decoding: try JSONValue.object(body).encodedData(), as: UTF8.self)
-            try await transport.send(text)
+            text = String(decoding: try JSONValue.object(body).encodedData(), as: UTF8.self)
         } catch {
             textReplies.remove(id)
             resume(id: id, with: .failure(error))
+            return
+        }
+        do {
+            try await transport.send(text)
+        } catch {
+            // The socket refused the frame, so it is dead whether or not
+            // receive() has noticed.
+            textReplies.remove(id)
+            resume(id: id, with: .failure(error))
+            drop(reason: error.localizedDescription)
         }
     }
 
@@ -148,9 +226,19 @@ public actor HAClient {
                     let text = try await self.transport.receive()
                     await self.handle(text)
                 } catch {
-                    await self.handleClose(reason: error.localizedDescription)
+                    await self.drop(reason: error.localizedDescription)
                     return
                 }
+            }
+        }
+    }
+
+    private func startHeartbeat() {
+        heartbeatTask = Task { [weak self, heartbeatInterval] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(heartbeatInterval * 1_000_000_000))
+                guard !Task.isCancelled, let self else { return }
+                guard await self.checkAlive() else { return }
             }
         }
     }
@@ -167,12 +255,22 @@ public actor HAClient {
             }
         case .event(let id, let event):
             subscriptions[id]?(event)
+        case .pong(let id):
+            resume(id: id, with: .success(.null))
         default:
             break
         }
     }
 
-    private func handleClose(reason: String) {
+    /// Closes a live connection once, however many paths notice it died.
+    /// After `disconnect()` the reader is gone, so this does nothing.
+    private func drop(reason: String) {
+        guard readerTask != nil else { return }
+        readerTask?.cancel()
+        readerTask = nil
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+        transport.close()
         failAllPending(with: HAClientError.closed)
         subscriptions.removeAll()
         onClose?(reason)
