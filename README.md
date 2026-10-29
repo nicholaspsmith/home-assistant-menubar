@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
 
-**Version 1.6.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.17.1** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -23,7 +23,9 @@ The icon is a cottage:
 - **Windows light** with the number of lights on in the selected dashboard.
 - **A fan turns** in the right window while any fan is running.
 - **The house is hollow** when Home Assistant cannot be reached (expected while
-  a VPN blocks the route to it).
+  a VPN blocks the route to it). It reconnects by itself: Homestead pings Home
+  Assistant every 30 seconds and after every network change or wake, so a
+  connection that died silently is noticed and replaced within seconds.
 - **Weather** from a Home Assistant `weather` entity is drawn around the house:
   sun or moon behind the roof (`sun.sun` decides night), clouds over it, rain,
   snow, sleet or lightning beside the walls, fog and wind. Hover the icon for

@@ -15,9 +15,16 @@ private final class FakeTransport: HATransport, @unchecked Sendable {
     private var waiters: [CheckedContinuation<String, Error>] = []
     private var sentFrames: [String] = []
     private var closed = false
+    private var sendError: Error?
 
     /// - Parameter initial: frames the server sends unprompted (the handshake).
     init(initial: [String] = []) { inbound = initial }
+
+    /// Every later send throws this, the way a socket whose local address
+    /// vanished (a VPN dropping) refuses writes while reads stay blocked.
+    func failSends(with error: Error) {
+        lock.lock(); sendError = error; lock.unlock()
+    }
 
     var sent: [String] {
         lock.lock(); defer { lock.unlock() }
@@ -45,7 +52,11 @@ private final class FakeTransport: HATransport, @unchecked Sendable {
     func connect(to url: URL) async throws {}
 
     func send(_ text: String) async throws {
-        lock.lock(); sentFrames.append(text); lock.unlock()
+        lock.lock()
+        let refusal = sendError
+        if refusal == nil { sentFrames.append(text) }
+        lock.unlock()
+        if let refusal { throw refusal }
     }
 
     func receive() async throws -> String {
@@ -62,8 +73,38 @@ private final class FakeTransport: HATransport, @unchecked Sendable {
         }
     }
 
+    /// Closing fails a blocked receive, as cancelling a URLSession task does.
     func close() {
-        lock.lock(); closed = true; lock.unlock()
+        lock.lock()
+        closed = true
+        let blocked = waiters
+        waiters.removeAll()
+        lock.unlock()
+        for waiter in blocked { waiter.resume(throwing: HAClientError.closed) }
+    }
+
+    /// The ids of every frame of `type` the client sent.
+    func ids(ofType type: String) -> [Int] {
+        sent.compactMap { frame in
+            guard let parsed = try? JSONValue.parse(Data(frame.utf8)),
+                  parsed["type"]?.string == type else { return nil }
+            return parsed["id"]?.int
+        }
+    }
+}
+
+/// Records the reasons `onClose` was called with.
+private final class Closes: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [String] = []
+
+    var reasons: [String] {
+        lock.lock(); defer { lock.unlock() }
+        return storage
+    }
+
+    func append(_ reason: String) {
+        lock.lock(); storage.append(reason); lock.unlock()
     }
 }
 
@@ -200,6 +241,69 @@ final class HAClientTests: XCTestCase {
         try await client.connect(url: url, token: "t")
 
         await client.disconnect()
+        XCTAssertTrue(transport.isClosed)
+    }
+
+    func testARefusedWriteReportsTheConnectionClosed() async throws {
+        let transport = FakeTransport(initial: [#"{"type":"auth_required"}"#, #"{"type":"auth_ok"}"#])
+        let client = HAClient(transport: transport)
+        let closes = Closes()
+        await client.setOnClose { closes.append($0) }
+        try await client.connect(url: url, token: "t")
+
+        transport.failSends(with: URLError(.networkConnectionLost))
+        do {
+            _ = try await client.send(["type": .string("get_services")])
+            XCTFail("expected the write to fail")
+        } catch {}
+
+        XCTAssertEqual(closes.reasons.count, 1)
+        XCTAssertTrue(transport.isClosed)
+    }
+
+    func testUnansweredPingReportsTheConnectionClosed() async throws {
+        let transport = FakeTransport(initial: [#"{"type":"auth_required"}"#, #"{"type":"auth_ok"}"#])
+        let client = HAClient(transport: transport, heartbeatInterval: 0.05, pongTimeout: 0.05)
+        let closes = Closes()
+        await client.setOnClose { closes.append($0) }
+        try await client.connect(url: url, token: "t")
+
+        // The server never answers: the socket is half open.
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        XCTAssertFalse(transport.ids(ofType: "ping").isEmpty)
+        XCTAssertEqual(closes.reasons.count, 1)
+        XCTAssertTrue(transport.isClosed)
+    }
+
+    func testAnsweredPingKeepsTheConnection() async throws {
+        let transport = FakeTransport(initial: [#"{"type":"auth_required"}"#, #"{"type":"auth_ok"}"#])
+        let client = HAClient(transport: transport)
+        let closes = Closes()
+        await client.setOnClose { closes.append($0) }
+        try await client.connect(url: url, token: "t")
+
+        async let alive = client.checkAlive(timeout: 1)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let id = try XCTUnwrap(transport.ids(ofType: "ping").first)
+        transport.push(#"{"id":\#(id),"type":"pong"}"#)
+
+        let answered = await alive
+        XCTAssertTrue(answered)
+        XCTAssertTrue(closes.reasons.isEmpty)
+        XCTAssertFalse(transport.isClosed)
+    }
+
+    func testSilentServerTimesOutTheHandshake() async throws {
+        let transport = FakeTransport()   // never sends auth_required
+        let client = HAClient(transport: transport, handshakeTimeout: 0.1)
+
+        do {
+            try await client.connect(url: url, token: "t")
+            XCTFail("expected a timeout")
+        } catch {
+            XCTAssertEqual(error as? HAClientError, .timedOut)
+        }
         XCTAssertTrue(transport.isClosed)
     }
 }
