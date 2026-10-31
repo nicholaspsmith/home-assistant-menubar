@@ -35,6 +35,8 @@ public actor HAClient {
     private var readerTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
     private var handshakeTimedOut = false
+    private var handshakeWaiter: CheckedContinuation<Void, Error>?
+    private var handshakeWatchdog: Task<Void, Never>?
     private var onClose: (@Sendable (String) -> Void)?
 
     public init(transport: HATransport,
@@ -54,25 +56,43 @@ public actor HAClient {
 
     public func connect(url: URL, token: String) async throws {
         // A server that accepts the socket and then says nothing would leave
-        // the menu on Connecting… for good; closing the transport unblocks
-        // the receive below.
+        // the menu on Connecting… for good, so the handshake gets a deadline.
+        // The deadline answers the caller itself: closing the transport does
+        // not always fail a blocked read — a socket opened as the Mac went
+        // back to sleep ignored its cancel, and the reconnect never ended.
         handshakeTimedOut = false
-        let watchdog = Task { [weak self, handshakeTimeout] in
-            try? await Task.sleep(nanoseconds: UInt64(handshakeTimeout * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            await self?.timeOutHandshake()
-        }
-        defer { watchdog.cancel() }
-        do {
-            try await handshake(url: url, token: token)
-        } catch where handshakeTimedOut {
-            throw HAClientError.timedOut
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            handshakeWaiter = continuation
+            handshakeWatchdog = Task { [weak self, handshakeTimeout] in
+                try? await Task.sleep(nanoseconds: UInt64(handshakeTimeout * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                await self?.timeOutHandshake()
+            }
+            Task {
+                do {
+                    try await self.handshake(url: url, token: token)
+                    self.finishHandshake(.success(()))
+                } catch {
+                    self.finishHandshake(.failure(error))
+                }
+            }
         }
     }
 
     private func timeOutHandshake() {
+        guard handshakeWaiter != nil else { return }
         handshakeTimedOut = true
         transport.close()
+        finishHandshake(.failure(HAClientError.timedOut))
+    }
+
+    /// Answers `connect` once: the handshake and its deadline both end here.
+    private func finishHandshake(_ result: Result<Void, Error>) {
+        handshakeWatchdog?.cancel()
+        handshakeWatchdog = nil
+        guard let waiter = handshakeWaiter else { return }
+        handshakeWaiter = nil
+        waiter.resume(with: result)
     }
 
     private func handshake(url: URL, token: String) async throws {
@@ -90,6 +110,8 @@ public actor HAClient {
                 ])
                 try await transport.send(String(decoding: try frame.encodedData(), as: UTF8.self))
             case .authOK:
+                // Too late: connect already gave up, and its caller moved on.
+                guard !handshakeTimedOut else { throw HAClientError.timedOut }
                 startReader()
                 startHeartbeat()
                 return

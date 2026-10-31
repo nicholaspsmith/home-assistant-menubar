@@ -8,6 +8,14 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.17.2] - 2026-10-31
+
+- Homestead no longer gets stuck on Connecting… after the Mac sleeps in the
+  middle of a reconnect. The 15-second handshake limit now always ends the
+  attempt and retries; before, a connection opened just as the Mac went back
+  to sleep could hang for good, and the menu stayed empty until you quit and
+  reopened it.
+
 ## [1.17.1] - 2026-10-29
 
 - Homestead reconnects on its own when the connection to Home Assistant dies
