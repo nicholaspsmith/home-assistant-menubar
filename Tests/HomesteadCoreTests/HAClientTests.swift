@@ -16,9 +16,16 @@ private final class FakeTransport: HATransport, @unchecked Sendable {
     private var sentFrames: [String] = []
     private var closed = false
     private var sendError: Error?
+    private let closeUnblocksReceive: Bool
 
-    /// - Parameter initial: frames the server sends unprompted (the handshake).
-    init(initial: [String] = []) { inbound = initial }
+    /// - Parameters:
+    ///   - initial: frames the server sends unprompted (the handshake).
+    ///   - closeUnblocksReceive: false for a socket opened as the Mac went to
+    ///     sleep, whose blocked read never returns, even once it is cancelled.
+    init(initial: [String] = [], closeUnblocksReceive: Bool = true) {
+        inbound = initial
+        self.closeUnblocksReceive = closeUnblocksReceive
+    }
 
     /// Every later send throws this, the way a socket whose local address
     /// vanished (a VPN dropping) refuses writes while reads stay blocked.
@@ -77,8 +84,8 @@ private final class FakeTransport: HATransport, @unchecked Sendable {
     func close() {
         lock.lock()
         closed = true
-        let blocked = waiters
-        waiters.removeAll()
+        let blocked = closeUnblocksReceive ? waiters : []
+        if closeUnblocksReceive { waiters.removeAll() }
         lock.unlock()
         for waiter in blocked { waiter.resume(throwing: HAClientError.closed) }
     }
@@ -296,6 +303,19 @@ final class HAClientTests: XCTestCase {
 
     func testSilentServerTimesOutTheHandshake() async throws {
         let transport = FakeTransport()   // never sends auth_required
+        let client = HAClient(transport: transport, handshakeTimeout: 0.1)
+
+        do {
+            try await client.connect(url: url, token: "t")
+            XCTFail("expected a timeout")
+        } catch {
+            XCTAssertEqual(error as? HAClientError, .timedOut)
+        }
+        XCTAssertTrue(transport.isClosed)
+    }
+
+    func testHandshakeTimesOutWhenClosingDoesNotUnblockTheRead() async throws {
+        let transport = FakeTransport(closeUnblocksReceive: false)
         let client = HAClient(transport: transport, handshakeTimeout: 0.1)
 
         do {
