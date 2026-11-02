@@ -42,6 +42,9 @@ final class MenuController: NSObject, NSWindowDelegate {
     private var scriptForm: ScriptFormWindowController?
     /// The light the shared colour panel is currently driving.
     private var colorTarget: Device?
+    /// Moves automations' times on while the menu is open: one that runs
+    /// every minute has a new time every minute.
+    private var scheduleTimer: Timer?
 
     init(model: AppModel,
          addFooter: @escaping (NSMenu) -> Void,
@@ -56,6 +59,8 @@ final class MenuController: NSObject, NSWindowDelegate {
 
     /// Called when the menu closes, so the next open starts on the devices.
     func menuClosed() {
+        scheduleTimer?.invalidate()
+        scheduleTimer = nil
         pickerExpanded = false
         expandedSelect = nil
         expandedViews = []
@@ -114,6 +119,38 @@ final class MenuController: NSObject, NSWindowDelegate {
 
         menu.addItem(.separator())
         addFooter(menu)
+        startScheduleTimer()
+    }
+
+    /// While the menu is open, re-reads every automation row's time each few
+    /// seconds, in `.common` mode so it ticks while the menu tracks.
+    private func startScheduleTimer() {
+        guard scheduleTimer == nil, updaters.keys.contains(where: { $0.hasPrefix("automation.") }) else { return }
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshSchedules() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        scheduleTimer = timer
+    }
+
+    private func refreshSchedules() {
+        for (entityId, updates) in updaters where entityId.hasPrefix("automation.") {
+            let state = model.state(for: entityId)
+            updates.forEach { $0(state) }
+        }
+    }
+
+    /// When an automation that is switched on next runs, nil for one that is
+    /// off or waits on events rather than the clock.
+    private func nextRunText(_ device: Device, state: EntityState?) -> String? {
+        let snapshot = model.snapshot
+        guard state?.isOn == true, let triggers = snapshot.automationTriggers[device.entityId] else { return nil }
+        let now = Date()
+        guard let run = AutomationSchedule.nextRun(of: triggers, after: now, location: snapshot.sunLocation,
+                                                   timeZone: snapshot.houseTimeZone ?? .current,
+                                                   reported: SolarTimes.reported(by: model.sunState))
+        else { return nil }
+        return AutomationSchedule.text(for: run, now: now)
     }
 
     /// A group's heading, then its devices: rows, button grids (buttons from
@@ -252,7 +289,9 @@ final class MenuController: NSObject, NSWindowDelegate {
             showsSwitch: showsSwitch,
             accessory: accessory,
             onToggle: { [weak self] on in self?.toggled(device, on: on) },
-            onPickColor: canPickColor ? { [weak self] in self?.pickColor(for: device) } : nil
+            onPickColor: canPickColor ? { [weak self] in self?.pickColor(for: device) } : nil,
+            scheduleText: device.domain == "automation"
+                ? { [weak self] state in self?.nextRunText(device, state: state) } : nil
         )
         return (row, { state in
             row.update(state: state)
