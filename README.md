@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
 
-**Version 1.19.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.20.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -133,7 +133,8 @@ that entity's normal row.
 | Entity | Row shows | Controls |
 |---|---|---|
 | `light` | brightness % | switch, brightness slider, warmth slider in kelvin (tunable white), colour swatch opening the system picker (colour bulbs, once on and reporting a colour) |
-| `switch`, `input_boolean`, `remote`, `automation`, `group` | — | switch |
+| `switch`, `input_boolean`, `remote`, `group` | — | switch |
+| `automation` | when it next runs, for one on a clock or the sun (`5:28 PM`, `Tomorrow 6:20 AM`); blank while it is off or when it waits on events | switch |
 | `button`, `input_button`, `script`, `scene` | — | Press / Run / Activate; a script with input fields shows **Run…**, which closes the menu and opens a small form for them (text, password, choice, number, checkbox), then runs it with what you entered |
 | `lock` | Locked/Unlocked/Locking/Unlocking/Jammed/Open | one button that does the opposite, **Lock** or **Unlock**, on the first press; off while the lock is moving. The only lock in a section with a heading is a **padlock on the heading** instead: click it to unlock (locked, green, closed) or lock (unlocked or open, red, open); red with a warning badge when jammed (a click locks again); orange and unclickable while moving, grey and unclickable when unavailable. A section with two or more locks keeps them as rows |
 | `input_select`, `select` | — | the current option as a button: click it to expand the options under the row, click one to choose it |
@@ -241,6 +242,15 @@ Keychain, set it to `false` and sign in again in **Settings ▸ Connection…**.
   script is re-registered; its fields keep the order the script declares,
   which is read from the reply's text because a parsed JSON object loses it.
   What is typed is never logged and is cleared when the window closes.
+- **An automation's next run is worked out in Homestead.** Home Assistant
+  keeps no "next run" for an automation, so its triggers are read with
+  `automation/config` (on each dashboard load and after `automation_reloaded`)
+  and the soonest one is computed: sun triggers from the house's location in
+  `get_config`, snapped to `sun.sun`'s own `next_rising`/`next_setting`
+  when they agree (they differ by seconds, enough to tip a time over the
+  minute); clock and time-pattern triggers in the house's time zone. A time
+  held in a helper (`at: input_datetime.…`) is not read. Conditions are not
+  checked, so the time is when it triggers, not a promise that it acts.
 - **Sliders show only while a device is on**, except a cover's: setting a
   closed shade to half-way is how you open it half-way.
 - **Thermostat targets are stepped with buttons.** Presses collect briefly and

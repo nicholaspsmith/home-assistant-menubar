@@ -8,6 +8,17 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.20.0] - 2026-11-02
+
+- An automation's row shows when it runs next: "Close shades at sunset"
+  reads 5:28 PM, "Open shades at sunrise" Tomorrow 6:20 AM. Sun triggers
+  (sunrise, sunset, dawn, dusk, solar noon, with any offset), times of day
+  (with their weekdays) and time patterns (every hour, every five minutes)
+  all count; when there are several, the soonest shows. The time follows
+  Home Assistant's own sunrise and sunset, moves on while the menu is open,
+  and is blank while the automation is switched off or when it only waits
+  on events. Editing an automation in Home Assistant updates it.
+
 ## [1.19.0] - 2026-11-02
 
 - No user-visible changes.

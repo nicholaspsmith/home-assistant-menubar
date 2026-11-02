@@ -34,6 +34,13 @@ struct Snapshot {
     /// The scripts that ask for input when run, by object id: their rows
     /// open a form instead of running straight away.
     var scriptFields: [String: [ScriptField]] = [:]
+    /// Where the house is and its clock, from Home Assistant's config: what
+    /// an automation's next run is worked out in.
+    var sunLocation: SunLocation?
+    var houseTimeZone: TimeZone?
+    /// The scheduled triggers of each automation on the dashboard, by entity
+    /// id. Missing until read; empty for one that waits on events instead.
+    var automationTriggers: [String: [ScheduleTrigger]] = [:]
 
     var lightsOn: Int {
         groups.flatMap(\.devices)
@@ -95,6 +102,9 @@ final class AppModel {
     /// A pending re-read of the scripts' fields after Home Assistant
     /// re-registers one (a script reload does), so a burst is read once.
     private var scriptFieldsReload: Task<Void, Never>?
+    /// A pending re-read of the automations' triggers after Home Assistant
+    /// reloads them.
+    private var automationReload: Task<Void, Never>?
 
     private(set) var snapshot = Snapshot()
     var onSnapshotChange: ((Snapshot) -> Void)?
@@ -216,6 +226,9 @@ final class AppModel {
     }
 
     func state(for entityId: String) -> EntityState? { store[entityId] }
+
+    /// `sun.sun`, whose next sunrise and sunset are what sun triggers fire at.
+    var sunState: EntityState? { skyStore["sun.sun"] }
 
     // MARK: - Actions
 
@@ -389,11 +402,12 @@ final class AppModel {
                 try await client.connect(url: url, token: token)
                 reconnectAttempt = 0
                 update { $0.connection = .connected }
-                await loadTemperatureUnit()
+                await loadHouseConfig()
                 await loadWeather()
                 try await loadDashboards()
                 await loadScriptFields()
                 await watchScriptServices()
+                await watchAutomationReloads()
             } catch {
                 // A reload replaced this client while it was connecting; the
                 // new one owns the connection state.
@@ -407,13 +421,69 @@ final class AppModel {
         }
     }
 
-    /// A climate entity carries no unit of its own — the house has one.
-    private func loadTemperatureUnit() async {
+    /// A climate entity carries no unit of its own — the house has one. Its
+    /// location and time zone are what automation times are worked out in.
+    private func loadHouseConfig() async {
         guard let client,
-              let config = try? await client.send(["type": .string("get_config")]),
-              let unit = config["unit_system"]?["temperature"]?.string
+              let config = try? await client.send(["type": .string("get_config")])
         else { return }
-        update { $0.temperatureUnit = unit }
+        let location = config["latitude"]?.double.flatMap { latitude in
+            config["longitude"]?.double.map { SunLocation(latitude: latitude, longitude: $0) }
+        }
+        let zone = config["time_zone"]?.string.flatMap(TimeZone.init(identifier:))
+        update {
+            if let unit = config["unit_system"]?["temperature"]?.string { $0.temperatureUnit = unit }
+            $0.sunLocation = location
+            $0.houseTimeZone = zone
+        }
+    }
+
+    // MARK: - Automation times
+
+    /// Reads the triggers of every automation the dashboard shows, one
+    /// `automation/config` each, so their rows can say when they run next.
+    private func loadAutomationTriggers() async {
+        guard let client else { return }
+        let generation = loadGeneration
+        let ids = Set(refs.map(\.entityId).filter { $0.hasPrefix("automation.") }).sorted()
+        var triggers: [String: [ScheduleTrigger]] = [:]
+        for id in ids {
+            do {
+                let reply = try await client.send(["type": .string("automation/config"),
+                                                   "entity_id": .string(id)])
+                triggers[id] = reply["config"].map(AutomationSchedule.triggers(fromConfig:)) ?? []
+            } catch {
+                log.info("automation/config failed for \(id, privacy: .private): \(String(describing: error), privacy: .public)")
+            }
+        }
+        guard self.client === client, generation == loadGeneration,
+              triggers != snapshot.automationTriggers else { return }
+        update { $0.automationTriggers = triggers }
+    }
+
+    /// Editing an automation in Home Assistant reloads them all; read the
+    /// triggers again so a changed time shows without a reconnect.
+    private func watchAutomationReloads() async {
+        guard let client else { return }
+        do {
+            try await client.subscribe([
+                "type": .string("subscribe_events"),
+                "event_type": .string("automation_reloaded"),
+            ], onEvent: { [weak self] _ in
+                Task { @MainActor in self?.scheduleAutomationReload() }
+            })
+        } catch {
+            log.info("automation_reloaded subscription failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private func scheduleAutomationReload() {
+        automationReload?.cancel()
+        automationReload = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.loadAutomationTriggers()
+        }
     }
 
     // MARK: - Script fields
@@ -646,6 +716,7 @@ final class AppModel {
             return
         }
         subscriptionId = subscription
+        await loadAutomationTriggers()
     }
 
     private func applyEvent(_ event: JSONValue) {

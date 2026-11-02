@@ -25,6 +25,9 @@ final class DeviceRowView: NSView {
     private let onPickColor: (() -> Void)?
     /// How Home Assistant writes temperatures for this house, e.g. "°C".
     private let temperatureUnit: String
+    /// An automation's next run, shown in place of a value; nil for rows
+    /// that have none.
+    private let scheduleText: ((EntityState?) -> String?)?
 
     var switchIsOn: Bool { toggle.state == .on }
 
@@ -34,14 +37,17 @@ final class DeviceRowView: NSView {
     ///   - accessory: a trailing control shown in the switch's place.
     ///   - onPickColor: supplied only for a light whose bulb actually takes a
     ///     colour; the row then shows a swatch that opens the picker.
+    ///   - scheduleText: for an automation, when it next runs.
     init(device: Device,
          state: EntityState?,
          temperatureUnit: String = "°",
          showsSwitch: Bool? = nil,
          accessory: NSView? = nil,
          onToggle: @escaping (Bool) -> Void,
-         onPickColor: (() -> Void)? = nil) {
+         onPickColor: (() -> Void)? = nil,
+         scheduleText: ((EntityState?) -> String?)? = nil) {
         self.device = device
+        self.scheduleText = scheduleText
         self.showsSwitch = showsSwitch ?? device.kind.hasSwitch
         self.accessory = accessory
         self.onToggle = onToggle
@@ -95,7 +101,10 @@ final class DeviceRowView: NSView {
                 trailingControl.centerYAnchor.constraint(equalTo: centerYAnchor),
             ]
         }
-        valueLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        // A long automation name gives way to its time, which is the point
+        // of showing it; everywhere else the name wins.
+        valueLabel.setContentCompressionResistancePriority(scheduleText == nil ? .defaultLow : .defaultLow + 2,
+                                                           for: .horizontal)
         nameLabel.setContentCompressionResistancePriority(.defaultLow + 1, for: .horizontal)
         if let trailingControl, onPickColor != nil {
             constraints += [
@@ -129,9 +138,9 @@ final class DeviceRowView: NSView {
         toggle.isEnabled = available
         toggle.state = (state?.isOn ?? false) ? .on : .off
         nameLabel.textColor = available ? .labelColor : .tertiaryLabelColor
-        valueLabel.stringValue = available
-            ? Self.valueText(device: device, state: state, temperatureUnit: temperatureUnit)
-            : "Unavailable"
+        valueLabel.stringValue = !available ? "Unavailable"
+            : scheduleText.map { $0(state) ?? "" }
+            ?? Self.valueText(device: device, state: state, temperatureUnit: temperatureUnit)
 
         if onPickColor != nil {
             // A light that is off reports no colour, and an empty ring sitting
