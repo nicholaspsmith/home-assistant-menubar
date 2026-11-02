@@ -8,6 +8,10 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.18.0] - 2026-11-01
+
+- No user-visible changes.
+
 ## [1.17.2] - 2026-10-31
 
 - Homestead no longer gets stuck on Connecting… after the Mac sleeps in the
