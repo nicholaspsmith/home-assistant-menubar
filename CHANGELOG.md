@@ -8,6 +8,12 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.20.1] - 2026-11-02
+
+- A folded dashboard view (TV, say) has the same chevron as the dashboard
+  picker: pointing down while folded and up while open, where it used to
+  point right and then down.
+
 ## [1.20.0] - 2026-11-02
 
 - An automation's row shows when it runs next: "Close shades at sunset"
