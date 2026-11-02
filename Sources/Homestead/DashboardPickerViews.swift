@@ -7,6 +7,16 @@
 import AppKit
 import HomesteadCore
 
+/// The chevron on every row that opens in place — the dashboard picker and
+/// each folded dashboard view: down while folded, up while open. One image
+/// for all of them, so they cannot drift apart.
+enum DisclosureChevron {
+    static func image(expanded: Bool) -> NSImage? {
+        NSImage(systemSymbolName: expanded ? "chevron.up" : "chevron.down",
+                accessibilityDescription: expanded ? "Collapse" : "Expand")
+    }
+}
+
 /// The menu's first row: the current dashboard's name and a disclosure chevron.
 /// Clicking it expands the dashboard list in place — no submenu, so the menu
 /// stays open and switching dashboards can swap the device rows under the
@@ -23,8 +33,7 @@ final class DashboardHeaderView: MenuRowView {
         label.lineBreakMode = .byTruncatingTail
         label.stringValue = title
 
-        let symbol = expanded ? "chevron.up" : "chevron.down"
-        chevron.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        chevron.image = DisclosureChevron.image(expanded: expanded)
         chevron.contentTintColor = .secondaryLabelColor
 
         for view in [label, chevron] {
@@ -103,8 +112,7 @@ final class DisclosureRowView: MenuRowView {
         label.lineBreakMode = .byTruncatingTail
         label.stringValue = title
 
-        chevron.image = NSImage(systemSymbolName: expanded ? "chevron.down" : "chevron.right",
-                                accessibilityDescription: expanded ? "Collapse" : "Expand")
+        chevron.image = DisclosureChevron.image(expanded: expanded)
         chevron.contentTintColor = .secondaryLabelColor
 
         for view in [label, chevron] {
