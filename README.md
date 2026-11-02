@@ -44,7 +44,7 @@ Now and then Gertie welcomes you: the front door swings open a crack and
 shuts again (1.2 s), lamplight showing in the gap when a light is on. Only a
 house that is answering does it. When several Menumon mascots are running they
 take turns, a second apart: Archimedes (Claude Usage), Menu Pimp (Mac Daddy),
-Carol (SoundChain), Iguanamous (VPN & DNS), Armonitor (Monitor Lizard), Volta
+Carol (SoundChain), Iguanamous (VPN & DNS), Armonitor (Panes), Volta
 (Battery Time), Apollo (Apollo Monitor), Lumen (KeyLight), Manny (MacRecorder),
 then Gertie, counting only the ones that are running. Skipped when Reduce
 Motion is on.
