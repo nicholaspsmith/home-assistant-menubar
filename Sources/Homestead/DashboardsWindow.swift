@@ -73,6 +73,13 @@ final class DashboardsWindowController: NSWindowController, NSTableViewDataSourc
         table.rowHeight = 24
         table.style = .inset
         table.allowsMultipleSelection = false
+        // A click anywhere on a row ticks it; a press that moves drags it. The
+        // row's checkbox only shows the tick (see PassThroughCheckbox), so a
+        // drag can start on the title or the box, not just the empty space
+        // past the title.
+        table.selectionHighlightStyle = .none
+        table.target = self
+        table.action = #selector(rowClicked)
         table.dataSource = self
         table.delegate = self
         table.registerForDraggedTypes([Self.rowType])
@@ -117,18 +124,33 @@ final class DashboardsWindowController: NSWindowController, NSTableViewDataSourc
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let dashboard = dashboards[row]
-        let box = NSButton(checkboxWithTitle: dashboard.title, target: self, action: #selector(toggled(_:)))
+        let box = PassThroughCheckbox(checkboxWithTitle: dashboard.title, target: self, action: #selector(toggled(_:)))
         box.state = settings.visibleDashboardPaths.contains(dashboard.urlPath ?? "") ? .on : .off
         box.tag = row
         box.lineBreakMode = .byTruncatingTail
         return box
     }
 
+    /// A click (not a drag) on a row flips its tick.
+    @objc private func rowClicked() {
+        let row = table.clickedRow
+        guard dashboards.indices.contains(row),
+              let box = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? NSButton
+        else { return }
+        box.state = box.state == .on ? .off : .on
+        setTicked(box.state == .on, row: row)
+    }
+
+    /// VoiceOver presses the checkbox itself.
     @objc private func toggled(_ sender: NSButton) {
-        guard dashboards.indices.contains(sender.tag) else { return }
-        let path = dashboards[sender.tag].urlPath ?? ""
+        setTicked(sender.state == .on, row: sender.tag)
+    }
+
+    private func setTicked(_ on: Bool, row: Int) {
+        guard dashboards.indices.contains(row) else { return }
+        let path = dashboards[row].urlPath ?? ""
         var chosen = settings.visibleDashboardPaths
-        if sender.state == .on {
+        if on {
             if !chosen.contains(path) { chosen.append(path) }
         } else {
             chosen.removeAll { $0 == path }
@@ -189,4 +211,13 @@ final class DashboardsWindowController: NSWindowController, NSTableViewDataSourc
     private func updateSortButton() {
         sortButton?.isEnabled = !settings.dashboardOrder.isEmpty
     }
+}
+
+/// A checkbox that only shows its tick: mouse presses fall through to the
+/// table, so every part of a row starts a drag, and a click is handled by the
+/// table's action. A real NSButton tracks the press itself, so a drag that
+/// starts on its title or box never reaches the table: the cause of rows that
+/// "sometimes" refused to move. Accessibility presses still reach its action.
+private final class PassThroughCheckbox: NSButton {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

@@ -8,6 +8,12 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.22.1] - 2026-11-03
+
+- Dragging a dashboard in Dashboards… works from anywhere on its row. Before, a
+  drag that started on the name or the checkbox did nothing, so rows seemed to
+  move only some of the time. Clicking a row still ticks or unticks it.
+
 ## [1.22.0] - 2026-11-03
 
 - The status dot in keep-open menu rows now aligns with other items instead of being pushed to the right.
