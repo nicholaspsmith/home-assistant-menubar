@@ -26,7 +26,7 @@ struct Snapshot {
     var states: [String: EntityState] = [:]
     /// How this Home Assistant writes temperatures, from its own config.
     var temperatureUnit: String = "°"
-    /// Every `weather.*` entity, for the Weather submenu, with the one the
+    /// Every `weather.*` entity, for Preferences ▸ Weather, with the one the
     /// icon follows (nil when there is none, or weather is turned off).
     var weatherEntities: [(id: String, name: String)] = []
     var weatherEntity: String?
@@ -538,7 +538,7 @@ final class AppModel {
     /// Lists the weather entities from the entity registry's display list —
     /// small, where `get_states` is every entity in the house in one message —
     /// and subscribes to them and the sun. All of them, not just the chosen
-    /// one: the submenu shows their names, and switching is instant.
+    /// one: Preferences ▸ Weather shows their names, and switching is instant.
     private func loadWeather() async {
         guard let client else { return }
         let listing = try? await client.send(["type": .string("config/entity_registry/list_for_display")])

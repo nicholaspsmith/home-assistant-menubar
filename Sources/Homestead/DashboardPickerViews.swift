@@ -25,7 +25,9 @@ final class DashboardHeaderView: MenuRowView {
     private let label = NSTextField(labelWithString: "")
     private let chevron = NSImageView()
 
-    init(title: String, expanded: Bool, onClick: @escaping () -> Void) {
+    /// - Parameter onClick: nil while there is nothing to pick; the row then
+    ///   reads as a label, grey and without its chevron.
+    init(title: String, expanded: Bool, onClick: (() -> Void)?) {
         super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 28))
         self.onClick = onClick
 
@@ -34,6 +36,7 @@ final class DashboardHeaderView: MenuRowView {
         label.stringValue = title
 
         chevron.image = DisclosureChevron.image(expanded: expanded)
+        chevron.isHidden = onClick == nil
         chevron.contentTintColor = .secondaryLabelColor
 
         for view in [label, chevron] {
@@ -53,7 +56,7 @@ final class DashboardHeaderView: MenuRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        label.textColor = rowTextColor
+        label.textColor = onClick == nil ? .disabledControlTextColor : rowTextColor
         chevron.contentTintColor = isRowHighlighted ? .selectedMenuItemTextColor : .secondaryLabelColor
     }
 }

@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
 
-**Version 1.20.1** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.21.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -49,7 +49,7 @@ Carol (SoundChain), Iguanamous (VPN & DNS), Armonitor (Panes), Volta
 then Gertie, counting only the ones that are running. Skipped when Reduce
 Motion is on.
 
-**Icon ▸ Dot** (in the main menu, just below Settings) replaces the cottage with a plain dot; **Icon ▸ House** restores it.
+**Preferences… ▸ Menu Bar Icon ▸ Dot** replaces the cottage with a plain dot (green while Home Assistant answers); **House** restores it.
 
 ## Requirements
 
@@ -72,7 +72,7 @@ app.
 ## First run
 
 1. Choose **Connect to Home Assistant…** (the only way in while signed out;
-   once signed in it is **Settings ▸ Connection…**). A server
+   once signed in it is **Preferences… ▸ Connection…**). A server
    that announces itself over Bonjour (`_home-assistant._tcp`) is filled in;
    otherwise enter its address, e.g. `http://homeassistant.local:8123`.
 2. **Sign In with Browser** opens Home Assistant's login page. Log in; the tab
@@ -80,14 +80,15 @@ app.
    if you close the Connection window. **Reopen Login Page** shows the same page
    again; a tab from an earlier attempt is rejected without cancelling the
    current one.
-3. Optional: **Settings ▸ Dashboards…** chooses which dashboards the picker offers and in
-   what order (drag to reorder).
+3. Optional: **Dashboards…** (in the menu, and in Preferences) chooses which
+   dashboards the picker offers and in what order. They are alphabetical until
+   you drag one; **Sort Alphabetically** goes back.
 
 ### Sign-in and tokens
 
 Sign-in returns a 30-minute access token and a refresh token; Homestead uses
 the refresh token to get a new access token on each reconnect. Both are stored
-in the login Keychain. **Sign Out** (in **Settings ▸ Connection…**) deletes them and
+in the login Keychain. **Sign Out** (in **Preferences… ▸ Connection…**) deletes them and
 revokes the refresh token on the server; you can also revoke it in Home
 Assistant under your profile ▸ Security ▸ Refresh tokens. A long-lived token
 stored by an older version keeps working until you sign in again.
@@ -142,26 +143,44 @@ that entity's normal row.
 | `cover` | Open/Closed/Opening, position | open / stop / close, position slider where supported (shown even while closed) |
 | `climate`, `water_heater` | reading · current action (Heating, Cooling, Idle) | mode picker from the entity's `hvac_modes` (in place of the switch); the target, or both ends of a heat/cool range, as buttons: click one, then ▲▼ step it |
 | `media_player` | what's playing, or the source | power, volume slider or volume ▼ mute ▲, ⏮ ⏯ ⏭ — each only if the player supports it |
-| `sensor`, `binary_sensor` | value worded as HA does (OK/Problem, 6 h ago, 14 d) | read-only; hidden unless **Settings ▸ Show Sensors** is ticked |
+| `sensor`, `binary_sensor` | value worded as HA does (OK/Problem, 6 h ago, 14 d) | read-only; hidden unless **Preferences… ▸ Show Sensors** is on |
 | any entity on a `gauge` card | a small arc filled between the card's `min` and `max` (0–100 by default), and the value | read-only; always shown. At the end of its section's heading when the section has one, else a row of its own. Coloured by the card's `severity` with Home Assistant's colours, blending smoothly from green through yellow to red; blue with no severity |
 
 Anything else (to-do lists, cameras, weather cards) is skipped.
 
-### Settings ▸
+### Clicking in the menu
 
-The menu ends with **Settings ▸**, **Icon ▸** (House or Dot) and **Quit Homestead** (⌘Q). The dashboard
-picker, status rows and device controls stay at the top level; everything
-below is in the Settings submenu, which StatusItemKit's `SettingsMenu` builds
-(Homestead supplies the first two groups).
+Clicking a control, a dashboard, a fold heading or **Retry Now** acts and
+leaves the menu open, updated in place. Only items ending in "…" (they open a
+window) and **Quit** close it. Rows you cannot click — section headings, the
+status line ("Connecting…", "Can't reach Home Assistant — retrying"), the
+dashboard heading while there is nothing to pick — are grey.
 
-| Item | Does |
-|---|---|
-| **Show Sensors** | Shows `sensor` and `binary_sensor` rows; the menu stays open, so the rows appear as you tick it |
-| **Weather ▸** | Weather entity for the icon: Automatic (prefers `weather.forecast_home`), a specific entity, or None. Absent when HA has no weather entity |
-| **Dashboards…** | Which dashboards the picker offers, and their order |
-| **Connection…** | Server address, sign in / sign out (shown when signed in) |
-| **Start at Login** | Registers the app with `SMAppService` |
-| **Version x.y.z** | The running build (grey) |
+### Dashboard order
+
+The picker lists dashboards **alphabetically** (ignoring case, numbers by
+value: "Dashboard 2" before "Dashboard 10") until you arrange them. Drag rows
+in **Dashboards…** and the picker follows that order at once. A dashboard
+added in Home Assistant later goes after the arranged ones, alphabetically
+among any others not yet arranged. **Sort Alphabetically** in Dashboards…
+forgets the dragged order.
+
+### Preferences…
+
+The menu ends with **Dashboards…**, **Preferences…** (⌘,) and **Quit
+Homestead** (⌘Q). The dashboard picker, status rows and device controls stay
+at the top level; every setting is in the **Homestead Preferences** window
+(StatusItemKit's shared `PreferencesPane`; Esc or ⌘W closes it), with the
+version at the bottom in grey.
+
+| Section | Setting | Does |
+|---|---|---|
+| General | **Start at Login** | Registers the app with `SMAppService` |
+| Menu | **Show Sensors** | Shows `sensor` and `binary_sensor` rows |
+| Menu | **Dashboards…** | Which dashboards the picker offers, and their order |
+| Menu Bar Icon | **House** / **Dot** | The icon, as tiles drawn as they look in the bar |
+| Menu Bar Icon | **Weather** | Weather entity for the house: Automatic (prefers `weather.forecast_home`), a specific entity, or None. Absent when HA has no weather entity |
+| Home Assistant | **Server**, **Status**, **Connection…** | The server address and connection state; Connection… changes the server, signs in or out |
 
 ## Development
 
@@ -206,7 +225,7 @@ The token then lives at `~/Library/Application Support/Homestead/ha-token`
 (mode `0600`) and is moved out of the Keychain on the next launch. **This is
 weaker**: the file is readable by anything running as you and is backed up as
 plaintext, so the setting is off by default and not in the UI. To return to the
-Keychain, set it to `false` and sign in again in **Settings ▸ Connection…**.
+Keychain, set it to `false` and sign in again in **Preferences… ▸ Connection…**.
 
 ### Implementation notes
 

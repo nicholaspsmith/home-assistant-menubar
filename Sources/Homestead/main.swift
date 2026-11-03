@@ -23,7 +23,10 @@ final class App: NSObject, NSApplicationDelegate {
     /// a plain status light. Neither varies with a fraction, so the
     /// proportional meters are not offered.
     private let appearance = MeterAppearance(defaultStyle: .character)
-    private var appearanceMenu: AppearanceMenu!
+    /// Preferences… (⌘,): every setting, in place of the old Settings and
+    /// Icon submenus.
+    private var preferences: PreferencesPane!
+    private var preferencesModel: PreferencesModel!
     private var connectionWindow: ConnectionWindowController?
     private var dashboardsWindow: DashboardsWindowController?
     private(set) var model: AppModel!
@@ -64,14 +67,6 @@ final class App: NSObject, NSApplicationDelegate {
         yieldClient = YieldClient(item: status)
         yieldClient.start()
 
-        appearanceMenu = AppearanceMenu(appearance: appearance,
-                                        styles: [.character, .dot],
-                                        characterTitle: "House",
-                                        onChange: { [weak self] in
-                                            self?.refreshIcon()
-                                            self?.updateWeatherMotion()
-                                        })
-
         // Keychain migrations run with the first token read, off the main
         // thread (TokenStore.loadInBackground): they can wait on a prompt.
 
@@ -81,10 +76,12 @@ final class App: NSObject, NSApplicationDelegate {
             addFooter: { [weak self] menu in self?.addFooter(to: menu) },
             onOpenConnection: { [weak self] in self?.openConnection() }
         )
+        makePreferences()
         model.onSnapshotChange = { [weak self] _ in
             self?.refreshIcon()
             self?.updateWeatherMotion()
             self?.menuController.rebuildIfOpen()
+            self?.refreshPreferencesIfOpen()
         }
         model.onWeatherChange = { [weak self] in
             self?.refreshIcon()
@@ -117,74 +114,47 @@ final class App: NSObject, NSApplicationDelegate {
         menuController.build(menu)
     }
 
-    /// The foot of the menu: Settings ▸ (this app's preferences, then Start
-    /// at Login and Version), the shared Icon ▸ below it, then Quit.
+    /// The foot of the menu: Dashboards…, Preferences… (⌘,) and Quit, as one
+    /// group. Dashboards… stays here as well as in Preferences: it is the
+    /// picker's own setting, and the one reached for most.
     func addFooter(to menu: NSMenu) {
-        SettingsMenu.addFooter(to: menu, appName: "Homestead", items: { submenu in
-            addSettingsItems(to: submenu)
-        }, appearance: appearanceMenu, startAtLogin: true)
-    }
-
-    /// Homestead's own settings, top of the Settings submenu.
-    private func addSettingsItems(to menu: NSMenu) {
-        // Keeps the menu open; the sensor rows above appear or go at once
-        // (the snapshot change rebuilds the rows above Settings ▸).
-        menu.addItem(ToggleMenuItem.make(title: "Show Sensors", isOn: settings.showSensors) { [weak self] on in
-            self?.model.setShowSensors(on)
-        })
-
-        if let weather = weatherMenuItem() { menu.addItem(weather) }
-
-        menu.addItem(.separator())
-
-        let dashboards = NSMenuItem(title: "Dashboards…", action: #selector(openDashboards), keyEquivalent: "")
-        dashboards.target = self
-        dashboards.isEnabled = !model.allDashboards.isEmpty
-        menu.addItem(dashboards)
-
-        // Signed out, the menu leads with Connect to Home Assistant… instead.
-        if MenuController.showsConnectionItem(model.snapshot.connection) {
-            let connection = NSMenuItem(title: "Connection…", action: #selector(openConnection), keyEquivalent: "")
-            connection.target = self
-            menu.addItem(connection)
+        if model.snapshot.connection != .unconfigured {
+            let dashboards = NSMenuItem(title: "Dashboards…", action: #selector(openDashboards), keyEquivalent: "")
+            dashboards.target = self
+            dashboards.isEnabled = !model.allDashboards.isEmpty
+            menu.addItem(dashboards)
         }
+        menu.addItem(PreferencesMenu.item { [weak self] in self?.preferences.show() })
+        let quit = NSMenuItem(title: "Quit Homestead", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.target = NSApp
+        menu.addItem(quit)
     }
 
-    /// Weather ▸ Automatic, each weather entity, None. Absent when Home
-    /// Assistant has no weather entity at all.
-    private func weatherMenuItem() -> NSMenuItem? {
-        let snapshot = model.snapshot
-        guard !snapshot.weatherEntities.isEmpty else { return nil }
-        let submenu = NSMenu()
-        let chosen = settings.weatherEntity
+    // MARK: - Preferences
 
-        let automaticName = WeatherReport.automaticEntity(from: snapshot.weatherEntities.map(\.id))
-            .flatMap { id in snapshot.weatherEntities.first { $0.id == id }?.name }
-        let automatic = NSMenuItem(title: automaticName.map { "Automatic (\($0))" } ?? "Automatic",
-                                   action: #selector(chooseWeather(_:)), keyEquivalent: "")
-        automatic.state = chosen == nil ? .on : .off
-        submenu.addItem(automatic)
-        submenu.addItem(.separator())
-        for entity in snapshot.weatherEntities {
-            let item = NSMenuItem(title: entity.name, action: #selector(chooseWeather(_:)), keyEquivalent: "")
-            item.representedObject = entity.id
-            item.state = chosen == entity.id ? .on : .off
-            submenu.addItem(item)
-        }
-        submenu.addItem(.separator())
-        let none = NSMenuItem(title: "None", action: #selector(chooseWeather(_:)), keyEquivalent: "")
-        none.representedObject = ""
-        none.state = chosen == "" ? .on : .off
-        submenu.addItem(none)
-        for item in submenu.items { item.target = self }
-
-        let item = NSMenuItem(title: "Weather", action: nil, keyEquivalent: "")
-        item.submenu = submenu
-        return item
+    private func makePreferences() {
+        let model = PreferencesModel(settings: settings, appearance: appearance, actions: .init(
+            snapshot: { [weak self] in self?.model.snapshot ?? Snapshot() },
+            hasDashboards: { [weak self] in !(self?.model.allDashboards.isEmpty ?? true) },
+            setIconStyle: { [weak self] style in
+                guard let self else { return }
+                self.appearance.style = style
+                self.refreshIcon()
+                self.updateWeatherMotion()
+            },
+            setShowSensors: { [weak self] on in self?.model.setShowSensors(on) },
+            setWeather: { [weak self] entity in self?.model.setWeatherEntity(entity) },
+            openDashboards: { [weak self] in self?.openDashboards() },
+            openConnection: { [weak self] in self?.openConnection() }
+        ))
+        preferencesModel = model
+        preferences = PreferencesPane(appName: "Homestead") { PreferencesView(model: model) }
+        preferences.onShow = { [weak model] in model?.refresh() }
     }
 
-    @objc private func chooseWeather(_ sender: NSMenuItem) {
-        model.setWeatherEntity(sender.representedObject as? String)
+    private func refreshPreferencesIfOpen() {
+        guard preferences?.window?.isVisible == true else { return }
+        preferencesModel.refresh()
     }
 
     @objc func openConnection() {

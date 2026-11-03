@@ -61,17 +61,22 @@ public final class Settings {
         set { defaults.set(newValue, forKey: Key.visibleDashboards) }
     }
 
-    /// The `url_path`s in the order the rows were dragged into. Paths missing
-    /// from it — a dashboard added in Home Assistant since — keep Home
-    /// Assistant's own order, after the ones that were arranged.
+    /// The `url_path`s in the order the rows were dragged into; empty until
+    /// they are (and again after Sort Alphabetically). Paths missing from it —
+    /// a dashboard added in Home Assistant since — go after the arranged ones,
+    /// alphabetically.
     public var dashboardOrder: [String] {
         get { defaults.stringArray(forKey: Key.dashboardOrder) ?? [] }
         set { defaults.set(newValue, forKey: Key.dashboardOrder) }
     }
 
     /// Every dashboard, in the chosen order: what the Dashboards window lists.
+    /// The arranged ones first, in their dragged order; the rest after them,
+    /// alphabetically by title ("Dashboard 2" before "Dashboard 10"), so with
+    /// nothing arranged the whole list is alphabetical.
     public func ordered(_ listings: [DashboardListing]) -> [DashboardListing] {
-        let rank = Dictionary(uniqueKeysWithValues: dashboardOrder.enumerated().map { ($0.element, $0.offset) })
+        let rank = Dictionary(dashboardOrder.enumerated().map { ($0.element, $0.offset) },
+                              uniquingKeysWith: { first, _ in first })
         return listings.enumerated().sorted { left, right in
             let leftRank = rank[left.element.urlPath ?? ""]
             let rightRank = rank[right.element.urlPath ?? ""]
@@ -79,10 +84,21 @@ public final class Settings {
             case let (l?, r?): return l < r
             case (_?, nil): return true
             case (nil, _?): return false
-            // Neither was arranged: keep Home Assistant's order between them.
-            case (nil, nil): return left.offset < right.offset
+            case (nil, nil):
+                switch Self.compareTitles(left.element.title, right.element.title) {
+                case .orderedAscending: return true
+                case .orderedDescending: return false
+                // Same title either way: keep Home Assistant's order.
+                case .orderedSame: return left.offset < right.offset
+                }
             }
         }.map(\.element)
+    }
+
+    /// Alphabetical the way Finder sorts names: case-insensitive, numbers by
+    /// value.
+    static func compareTitles(_ a: String, _ b: String) -> ComparisonResult {
+        a.localizedStandardCompare(b)
     }
 
     /// The dashboards to offer in the menu: the ticked ones, in the chosen

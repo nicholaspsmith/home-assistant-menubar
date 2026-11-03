@@ -9,7 +9,7 @@ import HomesteadCore
 import StatusItemKit
 
 /// Chooses the status glyph for a snapshot: the house mascot, with the weather
-/// outside it, or the plain dot if Icon ▸ Dot is selected.
+/// outside it, or the plain dot if Preferences ▸ Menu Bar Icon is Dot.
 enum HouseIcon {
     /// - Parameters:
     ///   - door: progress through Gertie's welcome, 0 … 1 (0 is the door shut,
@@ -18,11 +18,18 @@ enum HouseIcon {
     ///     still sky).
     static func image(snapshot: Snapshot, appearance: MeterAppearance, door: CGFloat = 0,
                       weatherPhase: CGFloat = 0) -> NSImage {
+        image(snapshot: snapshot, style: appearance.style, door: door, weatherPhase: weatherPhase)
+    }
+
+    /// The icon in `style`, whichever is chosen: Preferences draws each
+    /// choice's tile with it.
+    static func image(snapshot: Snapshot, style: MeterStyle, door: CGFloat = 0,
+                      weatherPhase: CGFloat = 0) -> NSImage {
         let configured = snapshot.connection != .unconfigured
         let reachable = snapshot.connection == .connected
 
-        guard appearance.style == .character else {
-            return MeterIcon.image(style: appearance.style,
+        guard style == .character else {
+            return MeterIcon.image(style: style,
                                    fraction: reachable ? 1 : 0,
                                    color: color(for: snapshot))
         }
