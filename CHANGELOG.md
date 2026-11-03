@@ -8,6 +8,12 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.22.0] - 2026-11-03
+
+- Preferences are now in a dedicated window (⌘,) with a grouped layout, a Start at Login toggle, and an icon picker, replacing the previous Settings submenu.
+- Menus stay open after selecting an option (except for Quit and items ending in "…"), and you can collapse sections using new foldable headings.
+- Read-only information rows in menus now always appear in grey text, even when added dynamically.
+
 ## [1.21.0] - 2026-11-03
 
 - Settings have moved to a **Homestead Preferences** window (menu ▸
