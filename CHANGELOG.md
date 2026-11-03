@@ -8,6 +8,14 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.22.0] - 2026-11-03
+
+- The status dot in keep-open menu rows now aligns with other items instead of being pushed to the right.
+- Keep-open menu rows with status dots are no longer clipped at the end when the title is long.
+- The Settings submenu has been replaced by a standard Preferences window (⌘,) that includes a Start at Login toggle and icon picker.
+- Menus now stay open when you select an option, allowing you to make multiple changes without reopening the menu.
+- Menu sections can now be folded away to hide their contents, and read-only information rows are always displayed in grey.
+
 ## [1.21.0] - 2026-11-03
 
 - Settings have moved to a **Homestead Preferences** window (menu ▸
