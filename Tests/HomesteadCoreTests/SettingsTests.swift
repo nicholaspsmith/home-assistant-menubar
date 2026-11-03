@@ -95,7 +95,8 @@ final class SettingsTests: XCTestCase {
             DashboardListing(urlPath: "my-home", title: "My Home"),
             DashboardListing(urlPath: "garden", title: "Garden"),
         ]
-        XCTAssertEqual(Settings(defaults: defaults).visible(from: listings), listings)
+        XCTAssertEqual(Set(Settings(defaults: defaults).visible(from: listings).map(\.urlPath)),
+                       ["my-home", "garden"])
     }
 
     func testOnlyChosenDashboardsAreVisible() {
@@ -107,7 +108,8 @@ final class SettingsTests: XCTestCase {
             DashboardListing(urlPath: "garden", title: "Garden"),
             DashboardListing(urlPath: "spa", title: "Hot Tub"),
         ]
-        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["my-home", "spa"])
+        // Nothing arranged: alphabetical, Hot Tub before My Home.
+        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["spa", "my-home"])
     }
 
     func testAHiddenNamesakeDoesNotSuffixTheVisibleDashboard() {
@@ -135,7 +137,9 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["spa", "my-home"])
     }
 
-    func testDashboardsMissingFromTheOrderKeepHomeAssistantsOrderAtTheEnd() {
+    func testDashboardsMissingFromTheOrderGoAfterItAlphabetically() {
+        // A dashboard added in Home Assistant after the rows were arranged
+        // slots in among the unarranged ones by name, not at HA's position.
         let settings = Settings(defaults: defaults)
         settings.dashboardOrder = ["spa"]
 
@@ -143,8 +147,66 @@ final class SettingsTests: XCTestCase {
             DashboardListing(urlPath: "my-home", title: "My Home"),
             DashboardListing(urlPath: "garden", title: "Garden"),
             DashboardListing(urlPath: "spa", title: "Hot Tub"),
+            DashboardListing(urlPath: "added", title: "Attic"),
         ]
-        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["spa", "my-home", "garden"])
+        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["spa", "added", "garden", "my-home"])
+    }
+
+    // MARK: - Default order
+
+    func testWithNothingArrangedTheOrderIsAlphabetical() {
+        let listings = [
+            DashboardListing(urlPath: "my-home", title: "My Home"),
+            DashboardListing(urlPath: "garden", title: "Garden"),
+            DashboardListing(urlPath: "spa", title: "Hot Tub"),
+        ]
+        let settings = Settings(defaults: defaults)
+        XCTAssertEqual(settings.ordered(listings).map(\.title), ["Garden", "Hot Tub", "My Home"])
+        XCTAssertEqual(settings.visible(from: listings).map(\.title), ["Garden", "Hot Tub", "My Home"])
+    }
+
+    func testAlphabeticalIgnoresCaseAndSortsNumbersByValue() {
+        let listings = [
+            DashboardListing(urlPath: "d10", title: "Dashboard 10"),
+            DashboardListing(urlPath: "b", title: "basement"),
+            DashboardListing(urlPath: "d2", title: "Dashboard 2"),
+            DashboardListing(urlPath: "a", title: "Attic"),
+        ]
+        XCTAssertEqual(Settings(defaults: defaults).ordered(listings).map(\.title),
+                       ["Attic", "basement", "Dashboard 2", "Dashboard 10"])
+    }
+
+    func testACustomOrderWinsOverAlphabetical() {
+        let settings = Settings(defaults: defaults)
+        settings.dashboardOrder = ["my-home", "spa", "garden"]
+        let listings = [
+            DashboardListing(urlPath: "garden", title: "Garden"),
+            DashboardListing(urlPath: "spa", title: "Hot Tub"),
+            DashboardListing(urlPath: "my-home", title: "My Home"),
+        ]
+        XCTAssertEqual(settings.visible(from: listings).map(\.urlPath), ["my-home", "spa", "garden"])
+    }
+
+    func testClearingTheOrderGoesBackToAlphabetical() {
+        let settings = Settings(defaults: defaults)
+        settings.dashboardOrder = ["spa", "my-home", "garden"]
+        settings.dashboardOrder = []
+        let listings = [
+            DashboardListing(urlPath: "my-home", title: "My Home"),
+            DashboardListing(urlPath: "spa", title: "Hot Tub"),
+            DashboardListing(urlPath: "garden", title: "Garden"),
+        ]
+        XCTAssertEqual(Settings(defaults: defaults).ordered(listings).map(\.urlPath), ["garden", "spa", "my-home"])
+    }
+
+    func testARepeatedPathInTheStoredOrderDoesNotCrash() {
+        let settings = Settings(defaults: defaults)
+        settings.dashboardOrder = ["spa", "garden", "spa"]
+        let listings = [
+            DashboardListing(urlPath: "garden", title: "Garden"),
+            DashboardListing(urlPath: "spa", title: "Hot Tub"),
+        ]
+        XCTAssertEqual(settings.ordered(listings).map(\.urlPath), ["spa", "garden"])
     }
 
     func testOrderedListsEveryDashboardForTheWindow() {

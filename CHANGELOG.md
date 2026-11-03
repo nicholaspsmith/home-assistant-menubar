@@ -8,6 +8,28 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.21.0] - 2026-11-03
+
+- Settings have moved to a **Homestead Preferences** window (menu ▸
+  Preferences…, ⌘,), like Mac Daddy's. The Settings and Icon submenus are
+  gone; the menu now ends with Dashboards…, Preferences… and Quit Homestead.
+  The window holds Start at Login, Show Sensors, Dashboards…, the menu-bar
+  icon (House or Dot, drawn as tiles), the weather the house shows, and the
+  server with its Connection… button. Esc or ⌘W closes it. Your choices
+  carry over.
+- The icon's colour presets and Custom Colour… are gone: neither the house
+  nor the dot ever used them.
+- Retry Now keeps the menu open, so you can watch it reconnect.
+- Rows you can't click look like it: the "Connecting…" and "Can't reach Home
+  Assistant" lines are grey, and so is the dashboard heading while there are
+  no dashboards to pick (it no longer highlights or shows a chevron).
+- Dashboards are listed alphabetically until you arrange them ("Dashboard 2"
+  before "Dashboard 10"), in the menu's picker and in Dashboards…. Dragging
+  them in Dashboards… changes the picker straight away, and a dashboard added
+  in Home Assistant later slots in alphabetically after the ones you
+  arranged. A new **Sort Alphabetically** button in Dashboards… goes back to
+  alphabetical order.
+
 ## [1.20.2] - 2026-11-02
 
 - The Apollo Monitor icon now displays the current level in grey when it cannot be controlled (e.g., due to missing permissions or connectivity issues), instead of appearing dark.

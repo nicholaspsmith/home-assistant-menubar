@@ -6,6 +6,7 @@
 
 import AppKit
 import HomesteadCore
+import StatusItemKit
 
 /// Builds the dropdown and keeps it honest while it is open. Rows are
 /// view-based so toggling and dragging do not dismiss the menu; each device's
@@ -17,7 +18,7 @@ import HomesteadCore
 @MainActor
 final class MenuController: NSObject, NSWindowDelegate {
     private let model: AppModel
-    /// Appends Settings ▸ and Quit.
+    /// Appends Dashboards…, Preferences… and Quit.
     private let addFooter: (NSMenu) -> Void
     private let onOpenConnection: () -> Void
 
@@ -84,10 +85,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         addStatusRow(to: menu, snapshot: snapshot)
 
         if snapshot.groups.isEmpty, snapshot.connection == .connected, !pickerExpanded {
-            let empty = NSMenuItem(title: "No controllable devices on this dashboard",
-                                   action: nil, keyEquivalent: "")
-            empty.isEnabled = false
-            menu.addItem(empty)
+            menu.addItem(InfoMenuItem.make("No controllable devices on this dashboard"))
         }
 
         let groups = pickerExpanded ? [] : snapshot.groups
@@ -174,9 +172,9 @@ final class MenuController: NSObject, NSWindowDelegate {
                 updaters[lock.entityId, default: []].append { heading.updateLock(state: $0) }
             }
         } else {
-            let header = NSMenuItem(title: group.title.uppercased(), action: nil, keyEquivalent: "")
-            header.isEnabled = false
-            menu.addItem(header)
+            // Disabled by hand (InfoMenuItem), so a heading inserted as a view
+            // unfolds still draws grey.
+            menu.addItem(InfoMenuItem.make(group.title.uppercased()))
         }
 
         // A script that opens a form is a row of its own, where its Run… can
@@ -502,11 +500,15 @@ final class MenuController: NSObject, NSWindowDelegate {
     private func addPicker(to menu: NSMenu, snapshot: Snapshot) {
         let title = snapshot.selected?.title ?? "Dashboard"
         let headerItem = NSMenuItem()
-        headerItem.view = DashboardHeaderView(title: title, expanded: pickerExpanded) { [weak self] in
+        // With nothing to pick (still connecting, unreachable) the heading is
+        // only a label: grey, no chevron, no highlight.
+        let canPick = !snapshot.dashboards.isEmpty
+        headerItem.view = DashboardHeaderView(title: title, expanded: pickerExpanded,
+                                              onClick: canPick ? { [weak self] in
             guard let self, !self.model.snapshot.dashboards.isEmpty else { return }
             self.pickerExpanded.toggle()
             self.rebuildIfOpen()
-        }
+        } : nil)
         menu.addItem(headerItem)
 
         if pickerExpanded {
@@ -541,9 +543,13 @@ final class MenuController: NSObject, NSWindowDelegate {
             menu.addItem(connectItem())
         }
 
+        // A row of Homestead's own rather than a native item, so clicking it
+        // leaves the menu open on "Connecting…" (KeepOpenMenu's rule) and its
+        // title lines up with the status text above it: this menu has no
+        // checkmark column, which the shared KeepOpenMenuRow assumes.
         if case .unreachable = snapshot.connection {
-            let retry = NSMenuItem(title: "Retry Now", action: #selector(retry), keyEquivalent: "")
-            retry.target = self
+            let retry = NSMenuItem()
+            retry.view = ActionRowView(title: "Retry Now") { [weak self] in self?.retry() }
             menu.addItem(retry)
         }
         menu.addItem(.separator())
@@ -565,40 +571,12 @@ final class MenuController: NSObject, NSWindowDelegate {
     }
 
     /// The dashboard changed, or sensors were switched on: rebuild in place if
-    /// the menu is on screen.
+    /// the menu is on screen. Nothing in it has a submenu any more (settings
+    /// live in Preferences), so there is no open submenu to protect.
     func rebuildIfOpen() {
         guard let menu, !menu.items.isEmpty else { return }
-        // Settings ▸ is open (it is the highlighted row): replacing it would
-        // close the submenu under the pointer, e.g. right after Show Sensors
-        // is ticked there. Rebuild only the rows above it.
-        if let open = menu.highlightedItem, open.submenu != nil,
-           let foot = Self.footerStart(of: menu), menu.index(of: open) >= foot {
-            rebuildBody(of: menu)
-            return
-        }
         menu.removeAllItems()
         build(menu)
-    }
-
-    /// Rebuilds everything above Settings ▸ in place and leaves Settings and
-    /// Quit untouched.
-    private func rebuildBody(of live: NSMenu) {
-        guard let liveFoot = Self.footerStart(of: live) else { return }
-        let scratch = NSMenu()
-        build(scratch)
-        menu = live
-        guard let newFoot = Self.footerStart(of: scratch) else { return }
-        for _ in 0..<liveFoot { live.removeItem(at: 0) }
-        let body = Array(scratch.items[..<newFoot])
-        body.forEach(scratch.removeItem)
-        for (index, item) in body.enumerated() { live.insertItem(item, at: index) }
-    }
-
-    /// Index where the footer (separator, Settings ▸, Quit) begins.
-    private static func footerStart(of menu: NSMenu) -> Int? {
-        guard let settings = menu.items.lastIndex(where: { $0.submenu != nil && $0.title == "Settings" })
-        else { return nil }
-        return settings > 0 && menu.items[settings - 1].isSeparatorItem ? settings - 1 : settings
     }
 
     private static func warmthFraction(state: EntityState?) -> Double {
@@ -671,13 +649,13 @@ final class MenuController: NSObject, NSWindowDelegate {
         }
     }
 
-    @objc private func retry() {
+    private func retry() {
         model.retryNow()
     }
 
     /// Opens the system colour panel for a light. The menu closes as the panel
-    /// takes focus — unavoidable, and the same thing the shared Icon ▸ Custom
-    /// Colour… picker does — but the light keeps following the wheel live.
+    /// takes focus — unavoidable, as for any window opened from a menu — but
+    /// the light keeps following the wheel live.
     private func pickColor(for device: Device) {
         colorTarget = device
         let panel = NSColorPanel.shared
@@ -706,14 +684,8 @@ final class MenuController: NSObject, NSWindowDelegate {
                        blue: Int((rgb.blueComponent * 255).rounded()))
     }
 
-    /// Whether Settings ▸ offers Connection…: only when signed in,
-    /// because signed out the menu already leads with Connect to Home Assistant….
-    static func showsConnectionItem(_ connection: ConnectionState) -> Bool {
-        connection != .unconfigured && connection != .authFailed
-    }
-
     /// The one way in while signed out. Signed in, the same window is
-    /// Settings ▸ Connection… instead (see `showsConnectionItem`).
+    /// Preferences ▸ Connection… instead.
     private func connectItem() -> NSMenuItem {
         let connect = NSMenuItem(title: "Connect to Home Assistant…",
                                  action: #selector(openConnection), keyEquivalent: "")
@@ -741,16 +713,51 @@ extension MenuController {
 
 /// A plain text row. NSMenu reserves trailing space for the keyboard-shortcut
 /// column on title-based items, which makes a status line look off-centre; a
-/// view escapes that.
+/// view escapes that. Read-only, so it draws as a disabled item does.
 private final class StatusRowView: NSView {
     init(text: String) {
         super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 22))
         let label = NSTextField(labelWithString: text)
         label.font = .menuFont(ofSize: 0)
-        label.textColor = .secondaryLabelColor
+        label.textColor = .disabledControlTextColor
         label.frame = NSRect(x: 14, y: 3, width: DeviceRowView.width - 28, height: 16)
         addSubview(label)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
+/// An action that keeps the menu open, as a row: Retry Now. Its title sits
+/// where the status line's does.
+private final class ActionRowView: MenuRowView {
+    private let label = NSTextField(labelWithString: "")
+
+    init(title: String, onClick: @escaping () -> Void) {
+        super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 22))
+        self.onClick = onClick
+        label.font = .menuFont(ofSize: 0)
+        label.stringValue = title
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        setAccessibilityElement(true)
+        setAccessibilityRole(.menuItem)
+        setAccessibilityLabel(title)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        label.textColor = rowTextColor
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        onClick?()
+        return true
+    }
 }

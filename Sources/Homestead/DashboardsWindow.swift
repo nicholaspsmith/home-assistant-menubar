@@ -26,6 +26,8 @@ final class DashboardsWindowController: NSWindowController, NSTableViewDataSourc
     private let onChange: () -> Void
     private let table = NSTableView()
     private var dashboards: [DashboardListing] = []
+    /// Offered only while a dragged order is in force.
+    private var sortButton: NSButton?
 
     init(settings: Settings, onChange: @escaping () -> Void) {
         self.settings = settings
@@ -49,6 +51,7 @@ final class DashboardsWindowController: NSWindowController, NSTableViewDataSourc
     func show(dashboards all: [DashboardListing]) {
         dashboards = settings.ordered(all)
         table.reloadData()
+        updateSortButton()
         NSApp.activate(ignoringOtherApps: true)
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
@@ -59,7 +62,7 @@ final class DashboardsWindowController: NSWindowController, NSTableViewDataSourc
 
         let caption = NSTextField(wrappingLabelWithString:
             "Tick the dashboards to show in the menu, and drag to reorder them. "
-            + "With none ticked, all of them are shown.")
+            + "With none ticked, all of them are shown; until you drag one, they are in alphabetical order.")
         caption.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         caption.textColor = .secondaryLabelColor
 
@@ -75,12 +78,16 @@ final class DashboardsWindowController: NSWindowController, NSTableViewDataSourc
         table.registerForDraggedTypes([Self.rowType])
         table.draggingDestinationFeedbackStyle = .gap
 
+        let sort = NSButton(title: "Sort Alphabetically", target: self, action: #selector(sortAlphabetically))
+        sort.bezelStyle = .rounded
+        sortButton = sort
+
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
         scroll.documentView = table
 
-        for view in [caption, scroll] {
+        for view in [caption, scroll, sort] {
             view.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(view)
         }
@@ -92,7 +99,10 @@ final class DashboardsWindowController: NSWindowController, NSTableViewDataSourc
             scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
             scroll.topAnchor.constraint(equalTo: caption.bottomAnchor, constant: 10),
-            scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
+            scroll.bottomAnchor.constraint(equalTo: sort.topAnchor, constant: -12),
+
+            sort.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            sort.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
 
             // Nothing inside has an intrinsic width, so the window needs a size
             // of its own to keep. minSize only limits dragging, not layout.
@@ -159,7 +169,24 @@ final class DashboardsWindowController: NSWindowController, NSTableViewDataSourc
 
         settings.dashboardOrder = dashboards.map { $0.urlPath ?? "" }
         table.reloadData()
+        updateSortButton()
         onChange()
         return true
+    }
+
+    // MARK: - Sorting
+
+    /// Forgets the dragged order: the list, and the menu's picker, go back to
+    /// alphabetical, and dashboards keep their ticks.
+    @objc private func sortAlphabetically() {
+        settings.dashboardOrder = []
+        dashboards = settings.ordered(dashboards)
+        table.reloadData()
+        updateSortButton()
+        onChange()
+    }
+
+    private func updateSortButton() {
+        sortButton?.isEnabled = !settings.dashboardOrder.isEmpty
     }
 }
