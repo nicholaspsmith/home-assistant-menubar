@@ -10,9 +10,9 @@ Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 
 ## [1.22.0] - 2026-11-03
 
-- Preferences are now in a dedicated window (⌘,) with a grouped layout, a Start at Login toggle, and an icon picker, replacing the previous Settings submenu.
-- Menus stay open after selecting an option (except for Quit and items ending in "…"), and you can collapse sections using new foldable headings.
-- Read-only information rows in menus now always appear in grey text, even when added dynamically.
+- Keep-open menu rows with a status dot are now wide enough to display both the image and the full title without clipping.
+- The Settings submenu has been replaced by a standard Preferences window (⌘,) featuring grouped options, a start-at-login toggle, and an icon picker.
+- Menus now support folding sections that can be collapsed to hide rows, and read-only information rows are displayed in grey.
 
 ## [1.21.0] - 2026-11-03
 
