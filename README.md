@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
 
-**Version 1.21.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.22.1** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -81,8 +81,9 @@ app.
    again; a tab from an earlier attempt is rejected without cancelling the
    current one.
 3. Optional: **Dashboards…** (in the menu, and in Preferences) chooses which
-   dashboards the picker offers and in what order. They are alphabetical until
-   you drag one; **Sort Alphabetically** goes back.
+   dashboards the picker offers and in what order: click a row to tick it, drag
+   it from anywhere on the row to move it. They are alphabetical until you drag
+   one; **Sort Alphabetically** goes back.
 
 ### Sign-in and tokens
 
