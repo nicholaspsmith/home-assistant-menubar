@@ -8,6 +8,11 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.22.2] - 2026-11-03
+
+- Updated StatusItemKit to 0.38.3
+- Fixed a bug where clicking a folding menu heading did nothing.
+
 ## [1.22.1] - 2026-11-03
 
 - Dragging a dashboard in Dashboards… works from anywhere on its row. Before, a
