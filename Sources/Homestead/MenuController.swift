@@ -160,21 +160,24 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// button) and lines of rows a horizontal stack put side by side.
     ///
     /// A section's heading folds: its rows show only once it is clicked, the
-    /// way a later view's row works (`GroupHeading` says which heading a
-    /// group gets).
+    /// way a later view's row works — unless it is the only section on its
+    /// view, whose rows show straight away (`GroupHeading` says which).
     private func addGroup(_ group: DeviceGroup, in groups: [DeviceGroup], to menu: NSMenu, snapshot: Snapshot) {
-        switch GroupHeading.style(for: group, in: groups) {
+        let style = GroupHeading.style(for: group, in: groups)
+        let expanded = expandedGroups.contains(group.foldKey)
+        switch style {
         case .none:
             break
-        case .plain:
+        case .plain where group.headingGauge == nil && group.headingLock == nil:
             // Disabled by hand (InfoMenuItem), so a heading inserted as a view
             // unfolds still draws grey.
             menu.addItem(InfoMenuItem.make(group.title.uppercased()))
-        case .folding:
-            let expanded = expandedGroups.contains(group.foldKey)
+        case .plain, .folding:
             // The section's padlock and battery sit at the end of its name.
-            let heading = HeadingView(title: group.title, expanded: expanded, gauge: group.headingGauge,
-                                      lock: group.headingLock, states: snapshot.states, onLock: { [weak self] lock in
+            let heading = HeadingView(title: style == .plain ? group.title.uppercased() : group.title,
+                                      expanded: style == .folding ? expanded : nil,
+                                      gauge: group.headingGauge, lock: group.headingLock, states: snapshot.states,
+                                      onLock: { [weak self] lock in
                 guard let self else { return }
                 self.model.lock(lock, LockIcon(state: self.model.state(for: lock.entityId)).action)
             }, onClick: { [weak self] in
@@ -191,7 +194,7 @@ final class MenuController: NSObject, NSWindowDelegate {
             if let lock = group.headingLock {
                 updaters[lock.entityId, default: []].append { heading.updateLock(state: $0) }
             }
-            guard expanded else { return }
+            guard style == .plain || expanded else { return }
         }
 
         // A script that opens a form is a row of its own, where its Run… can

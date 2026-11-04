@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
 
-**Version 1.23.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.23.1** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -116,11 +116,13 @@ the rows that follow them.
   every time the menu opens; click it to show its rows beneath it, and
   again to fold them away. A section's padlock and battery stay on its row
   either way. Cards with no section of their own sit under the view's name
-  in grey.
+  in grey. A view with a single section (a Thermostat dashboard) does not
+  fold: its rows show straight away, with no heading unless a padlock or
+  battery lives on it, in which case the heading stays, grey.
 - **Views.** The dashboard's first view is the menu. Each later view is a row
   with its title and a chevron, folded the same way; its sections fold inside
-  it, except that a view with a single section shows that section's rows
-  straight under the view's row rather than folding twice.
+  it, except that a view with a single section (Patio) shows that section's
+  rows straight under the view's row rather than folding twice.
 - **Horizontal stacks** of switches, locks, option lists and sensors share
   one line, as on the dashboard (e.g. a switch and the option list beside it).
 - **Card visibility** is followed live: a card whose `visibility` (or whose

@@ -8,6 +8,12 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.23.1] - 2026-11-04
+
+- A dashboard with a single section (Thermostat) no longer folds it: its rows
+  show as soon as the menu opens, with no heading. If that section's heading
+  carries a padlock or a battery, the heading stays, grey and unfoldable.
+
 ## [1.23.0] - 2026-11-04
 
 - Every section of a dashboard now folds, the way a later view already did:
