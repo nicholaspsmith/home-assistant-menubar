@@ -137,19 +137,21 @@ public struct DeviceGroup: Equatable, Sendable {
 /// How a group's title is drawn in the menu.
 public enum GroupHeading: Equatable, Sendable {
     /// A clickable row with a chevron, folded until clicked, like a later
-    /// view's row: every section on the dashboard folds.
+    /// view's row: a section among others on its view folds.
     case folding
-    /// A grey, read-only line: the view's name standing in for cards that
-    /// have no section or heading of their own.
+    /// A grey, read-only line, with the section's padlock and gauge if it
+    /// has them: the view's name standing in for cards that have no section
+    /// of their own, or the only section on its view when its heading holds
+    /// a lock or gauge.
     case plain
-    /// No heading at all: the only section on a later view, whose row
-    /// already names and folds it ("Patio ▸ Patio" would fold twice).
+    /// No heading at all: the only section on its view, whose rows show
+    /// straight away — under the dashboard's name on the first view, under
+    /// the view's own row on a later one ("Patio ▸ Patio" would fold twice).
     case none
 
     public static func style(for group: DeviceGroup, in groups: [DeviceGroup]) -> GroupHeading {
-        if group.view > 0, group.headingGauge == nil, group.headingLock == nil,
-           groups.filter({ $0.view == group.view }).count == 1 {
-            return .none
+        if groups.filter({ $0.view == group.view }).count == 1 {
+            return group.headingGauge == nil && group.headingLock == nil ? .none : .plain
         }
         return group.headed ? .folding : .plain
     }

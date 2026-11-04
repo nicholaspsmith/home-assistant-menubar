@@ -24,14 +24,33 @@ final class GroupHeadingTests: XCTestCase {
     }
 
     func testViewNameStandingInIsAPlainHeading() {
-        let groups = [group("Home", headed: false)]
+        // Cards before the first heading sit under the view's name, in grey.
+        let groups = [group("Home", headed: false), group("Kitchen")]
         XCTAssertEqual(GroupHeading.style(for: groups[0], in: groups), .plain)
+        XCTAssertEqual(GroupHeading.style(for: groups[1], in: groups), .folding)
+    }
+
+    func testADashboardWithNoSectionsHasNoHeading() {
+        let groups = [group("Home", headed: false)]
+        XCTAssertEqual(GroupHeading.style(for: groups[0], in: groups), .none)
     }
 
     func testLoneSectionOnALaterViewHasNoHeadingOfItsOwn() {
         // "Patio" view, one "Patio" section: the view's row is its fold.
         let groups = [group("Kitchen"), group("Patio", view: 1, viewTitle: "Patio")]
         XCTAssertEqual(GroupHeading.style(for: groups[1], in: groups), .none)
+    }
+
+    func testTheOnlySectionOfADashboardDoesNotFold() {
+        // A "Thermostat" dashboard with one "Thermostat" section: its rows
+        // show straight away, under the dashboard's name.
+        let groups = [group("Thermostat", viewTitle: "Thermostat")]
+        XCTAssertEqual(GroupHeading.style(for: groups[0], in: groups), .none)
+    }
+
+    func testTheOnlySectionOfTheFirstViewDoesNotFoldWhenLaterViewsExist() {
+        let groups = [group("Hot Tub"), group("Pump", view: 1, viewTitle: "Pump"), group("Heater", view: 1, viewTitle: "Pump")]
+        XCTAssertEqual(GroupHeading.style(for: groups[0], in: groups), .none)
     }
 
     func testSeveralSectionsOnALaterViewEachFold() {
@@ -41,10 +60,13 @@ final class GroupHeadingTests: XCTestCase {
         XCTAssertEqual(GroupHeading.style(for: groups[2], in: groups), .folding)
     }
 
-    func testLoneSectionWithAPadlockKeepsItsHeading() {
-        // The padlock lives on the heading, so the heading must stay.
+    func testLoneSectionWithAPadlockKeepsAPlainHeading() {
+        // The padlock lives on the heading, so the heading stays — but it
+        // does not fold, since there is nothing else to pick from.
         let groups = [group("Kitchen"), group("Garage", view: 1, viewTitle: "Garage", lock: lock)]
-        XCTAssertEqual(GroupHeading.style(for: groups[1], in: groups), .folding)
+        XCTAssertEqual(GroupHeading.style(for: groups[1], in: groups), .plain)
+        let alone = [group("Garage", viewTitle: "Garage", lock: lock)]
+        XCTAssertEqual(GroupHeading.style(for: alone[0], in: alone), .plain)
     }
 
     func testFoldKeyTellsSameTitlesOnDifferentViewsApart() {
