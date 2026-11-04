@@ -128,6 +128,31 @@ public struct DeviceGroup: Equatable, Sendable {
         self.view = view
         self.viewTitle = viewTitle
     }
+
+    /// Tells this group's fold from every other's while the menu is open:
+    /// two views can each have a section with the same name.
+    public var foldKey: String { "\(view)/\(title)" }
+}
+
+/// How a group's title is drawn in the menu.
+public enum GroupHeading: Equatable, Sendable {
+    /// A clickable row with a chevron, folded until clicked, like a later
+    /// view's row: every section on the dashboard folds.
+    case folding
+    /// A grey, read-only line: the view's name standing in for cards that
+    /// have no section or heading of their own.
+    case plain
+    /// No heading at all: the only section on a later view, whose row
+    /// already names and folds it ("Patio ▸ Patio" would fold twice).
+    case none
+
+    public static func style(for group: DeviceGroup, in groups: [DeviceGroup]) -> GroupHeading {
+        if group.view > 0, group.headingGauge == nil, group.headingLock == nil,
+           groups.filter({ $0.view == group.view }).count == 1 {
+            return .none
+        }
+        return group.headed ? .folding : .plain
+    }
 }
 
 public enum DeviceCatalog {

@@ -53,41 +53,49 @@ final class GaugeMeterView: NSStackView {
     }
 }
 
-/// A group heading with its section's lock and gauge at the trailing end —
-/// a door's name, a padlock to lock or unlock it, its battery. Looks like the
-/// plain heading items.
-final class HeadingView: NSView {
+/// A section's heading: its name, a chevron, and the section's lock and
+/// gauge at the trailing end — a door's name, a padlock to lock or unlock
+/// it, its battery. Clicking it folds or unfolds the section's rows, the way
+/// a later view's row does; the padlock still locks.
+final class HeadingView: MenuRowView {
+    private let label: NSTextField
+    private let chevron = NSImageView()
     private let meter: GaugeMeterView?
     private let padlock: ClosureButton?
 
-    init(title: String, gauge: Device?, lock: Device?, states: [String: EntityState],
-         onLock: @escaping (Device) -> Void) {
+    init(title: String, expanded: Bool, gauge: Device?, lock: Device?, states: [String: EntityState],
+         onLock: @escaping (Device) -> Void, onClick: @escaping () -> Void) {
+        label = NSTextField(labelWithString: title)
         meter = gauge.map { GaugeMeterView(gauge: $0.gauge ?? GaugeSpec(), state: states[$0.entityId]) }
         padlock = lock.map { lock in ClosureButton(symbol: LockIcon.locked, label: lock.displayName) { onLock(lock) } }
-        super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 22))
+        super.init(frame: NSRect(x: 0, y: 0, width: DeviceRowView.width, height: 24))
+        self.onClick = onClick
 
-        let label = NSTextField(labelWithString: title)
         label.font = .menuFont(ofSize: 0)
-        label.textColor = .disabledControlTextColor
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        chevron.image = DisclosureChevron.image(expanded: expanded)
+        chevron.contentTintColor = .secondaryLabelColor
         meter?.setAccessibilityLabel(gauge?.displayName)
         padlock?.imagePosition = .imageOnly
         padlock?.imageScaling = .scaleNone
 
-        // Two fixed columns against the trailing edge — padlock, then arc and
-        // value — so every heading's icons line up whatever its text or value.
-        // A heading with only one of them keeps the other's slot empty.
+        // The chevron sits where a view row's does, then two fixed columns
+        // before it — arc and value, then padlock — so every heading's icons
+        // line up whatever its text or value. A heading with only one of
+        // them keeps the other's slot empty.
         let lockSlot = NSView()
         let meterSlot = NSView()
-        for view in [label, lockSlot, meterSlot] {
+        for view in [label, chevron, lockSlot, meterSlot] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
         var constraints: [NSLayoutConstraint] = [
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: HeadingColumns.inset),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            meterSlot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -HeadingColumns.inset),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
+            meterSlot.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -HeadingColumns.gap),
             meterSlot.widthAnchor.constraint(equalToConstant: HeadingColumns.meterWidth),
             meterSlot.topAnchor.constraint(equalTo: topAnchor),
             meterSlot.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -121,6 +129,12 @@ final class HeadingView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        label.textColor = rowTextColor
+        chevron.contentTintColor = isRowHighlighted ? .selectedMenuItemTextColor : .secondaryLabelColor
+    }
 
     func updateGauge(state: EntityState?) { meter?.update(state: state) }
 

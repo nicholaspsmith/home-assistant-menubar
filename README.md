@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
 
-**Version 1.22.3** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.23.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -111,9 +111,16 @@ layout of its own. Cards are walked structurally, not by type, so stacks,
 grids, sections, conditionals and custom cards all work. Heading cards title
 the rows that follow them.
 
+- **Sections fold.** Every section of the dashboard (a section's title, a
+  heading card, a card's title) is a row with its name and a chevron, folded
+  every time the menu opens; click it to show its rows beneath it, and
+  again to fold them away. A section's padlock and battery stay on its row
+  either way. Cards with no section of their own sit under the view's name
+  in grey.
 - **Views.** The dashboard's first view is the menu. Each later view is a row
-  with its title and a chevron, folded every time the menu opens; click it to
-  show that view's rows beneath it.
+  with its title and a chevron, folded the same way; its sections fold inside
+  it, except that a view with a single section shows that section's rows
+  straight under the view's row rather than folding twice.
 - **Horizontal stacks** of switches, locks, option lists and sensors share
   one line, as on the dashboard (e.g. a switch and the option list beside it).
 - **Card visibility** is followed live: a card whose `visibility` (or whose
@@ -153,8 +160,8 @@ Anything else (to-do lists, cameras, weather cards) is skipped.
 
 Clicking a control, a dashboard, a fold heading or **Retry Now** acts and
 leaves the menu open, updated in place. Only items ending in "…" (they open a
-window) and **Quit** close it. Rows you cannot click — section headings, the
-status line ("Connecting…", "Can't reach Home Assistant — retrying"), the
+window) and **Quit** close it. Rows you cannot click — the view's name over
+cards that have no section, the status line ("Connecting…", "Can't reach Home Assistant — retrying"), the
 dashboard heading while there is nothing to pick — are grey.
 
 ### Dashboard order
@@ -235,7 +242,7 @@ Keychain, set it to `false` and sign in again in **Preferences… ▸ Connection
   selection. View-based rows do neither.
 - **Option lists expand inside the menu too**, for the same reason: an
   `input_select` or `select` row's options are view-based rows under it. So
-  do later dashboard views.
+  do sections and later dashboard views.
 - **Gauges reuse the menu-bar icon's arc** (`MeterIcon.arc` in
   StatusItemKit, the Icon ▸ Arc style). Severity colours are Home
   Assistant's default theme's `--success-color` `#43a047`, `--warning-color`

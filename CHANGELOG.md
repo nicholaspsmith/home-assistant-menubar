@@ -8,6 +8,16 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.23.0] - 2026-11-04
+
+- Every section of a dashboard now folds, the way a later view already did:
+  Kitchen, Living Room and Hall each open with a click and start folded every
+  time the menu opens, so a long dashboard is a short list of names until you
+  pick one. A section's padlock and battery stay on its row whether it is
+  open or folded.
+- A later view with a single section (Patio) shows its rows straight under the
+  view's row, instead of a second fold with the same name.
+
 ## [1.22.3] - 2026-11-03
 
 - Updated StatusItemKit to 0.38.4
