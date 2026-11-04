@@ -36,6 +36,9 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// The dashboard views after the first whose devices are showing. Each
     /// is folded under its title until clicked; reset when the menu closes.
     private var expandedViews: Set<Int> = []
+    /// The sections whose rows are showing, by `DeviceGroup.foldKey`. Every
+    /// section starts folded under its heading; reset when the menu closes.
+    private var expandedGroups: Set<String> = []
     /// For each entity a visibility condition reads, the rows to re-check
     /// when it changes — a toggle that shows or hides the select beside it.
     private var visibilityDependents: [String: Set<String>] = [:]
@@ -65,6 +68,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         pickerExpanded = false
         expandedSelect = nil
         expandedViews = []
+        expandedGroups = []
     }
 
     func build(_ menu: NSMenu) {
@@ -90,7 +94,7 @@ final class MenuController: NSObject, NSWindowDelegate {
 
         let groups = pickerExpanded ? [] : snapshot.groups
         for group in groups where group.view == 0 {
-            addGroup(group, to: menu, snapshot: snapshot)
+            addGroup(group, in: groups, to: menu, snapshot: snapshot)
         }
 
         // Later views fold away under their titles, like the dashboard's
@@ -111,7 +115,7 @@ final class MenuController: NSObject, NSWindowDelegate {
             menu.addItem(item)
             guard expanded else { continue }
             for group in groups where group.view == view.index {
-                addGroup(group, to: menu, snapshot: snapshot)
+                addGroup(group, in: groups, to: menu, snapshot: snapshot)
             }
         }
 
@@ -154,14 +158,30 @@ final class MenuController: NSObject, NSWindowDelegate {
     /// A group's heading, then its devices: rows, button grids (buttons from
     /// one dashboard grid keep its columns; a lone one is a row with a Press
     /// button) and lines of rows a horizontal stack put side by side.
-    private func addGroup(_ group: DeviceGroup, to menu: NSMenu, snapshot: Snapshot) {
-        if group.headingGauge != nil || group.headingLock != nil {
+    ///
+    /// A section's heading folds: its rows show only once it is clicked, the
+    /// way a later view's row works (`GroupHeading` says which heading a
+    /// group gets).
+    private func addGroup(_ group: DeviceGroup, in groups: [DeviceGroup], to menu: NSMenu, snapshot: Snapshot) {
+        switch GroupHeading.style(for: group, in: groups) {
+        case .none:
+            break
+        case .plain:
+            // Disabled by hand (InfoMenuItem), so a heading inserted as a view
+            // unfolds still draws grey.
+            menu.addItem(InfoMenuItem.make(group.title.uppercased()))
+        case .folding:
+            let expanded = expandedGroups.contains(group.foldKey)
             // The section's padlock and battery sit at the end of its name.
-            let heading = HeadingView(title: group.title.uppercased(), gauge: group.headingGauge,
-                                      lock: group.headingLock, states: snapshot.states) { [weak self] lock in
+            let heading = HeadingView(title: group.title, expanded: expanded, gauge: group.headingGauge,
+                                      lock: group.headingLock, states: snapshot.states, onLock: { [weak self] lock in
                 guard let self else { return }
                 self.model.lock(lock, LockIcon(state: self.model.state(for: lock.entityId)).action)
-            }
+            }, onClick: { [weak self] in
+                guard let self else { return }
+                if self.expandedGroups.remove(group.foldKey) == nil { self.expandedGroups.insert(group.foldKey) }
+                self.rebuildIfOpen()
+            })
             let item = NSMenuItem()
             item.view = heading
             menu.addItem(item)
@@ -171,10 +191,7 @@ final class MenuController: NSObject, NSWindowDelegate {
             if let lock = group.headingLock {
                 updaters[lock.entityId, default: []].append { heading.updateLock(state: $0) }
             }
-        } else {
-            // Disabled by hand (InfoMenuItem), so a heading inserted as a view
-            // unfolds still draws grey.
-            menu.addItem(InfoMenuItem.make(group.title.uppercased()))
+            guard expanded else { return }
         }
 
         // A script that opens a form is a row of its own, where its Run… can
