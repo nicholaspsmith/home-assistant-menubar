@@ -61,8 +61,10 @@ enum HouseIcon {
         appearance.style == .character && snapshot.connection == .connected
     }
 
-    /// The tooltip: what it is like outside, when the icon is showing it.
-    static func toolTip(snapshot: Snapshot) -> String? {
+    /// The menu's weather line: what it is like outside, when the icon is
+    /// showing it. A row in the menu rather than the icon's tooltip, which
+    /// could stay on screen after the pointer left.
+    static func weatherLine(snapshot: Snapshot) -> String? {
         snapshot.connection == .connected ? snapshot.weather?.summary : nil
     }
 

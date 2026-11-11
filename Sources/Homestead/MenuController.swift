@@ -87,6 +87,7 @@ final class MenuController: NSObject, NSWindowDelegate {
 
         addPicker(to: menu, snapshot: snapshot)
         addStatusRow(to: menu, snapshot: snapshot)
+        addWeatherRow(to: menu, snapshot: snapshot)
 
         if snapshot.groups.isEmpty, snapshot.connection == .connected, !pickerExpanded {
             menu.addItem(InfoMenuItem.make("No controllable devices on this dashboard"))
@@ -572,6 +573,17 @@ final class MenuController: NSObject, NSWindowDelegate {
             retry.view = ActionRowView(title: "Retry Now") { [weak self] in self?.retry() }
             menu.addItem(retry)
         }
+        menu.addItem(.separator())
+    }
+
+    /// What it is like outside, in words: the conditions and temperature the
+    /// house icon draws.
+    private func addWeatherRow(to menu: NSMenu, snapshot: Snapshot) {
+        guard let line = HouseIcon.weatherLine(snapshot: snapshot) else { return }
+        let item = NSMenuItem()
+        item.view = StatusRowView(text: line)
+        item.isEnabled = false
+        menu.addItem(item)
         menu.addItem(.separator())
     }
 

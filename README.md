@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
 
-**Version 1.25.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.25.1** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -28,8 +28,8 @@ The icon is a cottage:
   connection that died silently is noticed and replaced within seconds.
 - **Weather** from a Home Assistant `weather` entity is drawn around the house:
   sun or moon behind the roof (`sun.sun` decides night), clouds over it, rain,
-  snow, sleet or lightning beside the walls, fog and wind. Hover the icon for
-  the conditions and temperature.
+  snow, sleet or lightning beside the walls, fog and wind. The menu's first
+  line under the dashboard gives the conditions and temperature.
 - **The weather moves**, subtly and continuously: the sun gleams and slowly
   turns, the moon glows and a star twinkles, clouds drift or pass behind the
   roof, rain and snow fall beside the walls, fog banks slide, gusts blow out

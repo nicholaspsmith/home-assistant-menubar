@@ -185,8 +185,6 @@ final class App: NSObject, NSApplicationDelegate {
         let snapshot = model?.snapshot ?? Snapshot()
         status.setIcon(HouseIcon.image(snapshot: snapshot, appearance: appearance, door: door,
                                        weatherPhase: weatherPhase))
-        let tip = HouseIcon.toolTip(snapshot: snapshot)
-        if status.button?.toolTip != tip { status.button?.toolTip = tip }
     }
 
     /// Starts, retimes or stops the weather's motion: it runs only while the
