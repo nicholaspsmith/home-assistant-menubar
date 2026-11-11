@@ -8,6 +8,12 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.25.1] - 2026-11-10
+
+- The weather's conditions and temperature ("Partly cloudy · 60°F") are now a
+  line in the menu, under the dashboard's name. They were the icon's tooltip,
+  which could stay on screen after the pointer had moved away.
+
 ## [1.25.0] - 2026-11-10
 
 - Updated StatusItemKit to 0.40.0
