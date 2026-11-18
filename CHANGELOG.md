@@ -8,6 +8,15 @@ without one is refused (`[no release]` in the tip commit is the only exception).
 Versions follow [Semantic Versioning](https://semver.org/). The full rule:
 [StatusItemKit — Releases](https://github.com/nicholaspsmith/StatusItemKit#releases-every-push-is-one).
 
+## [1.26.0] - 2026-11-18
+
+- A blind or shade's slider now runs the way the shade does: slide it all the
+  way and the shade closes all the way, slide it back to an empty bar and the
+  shade is fully open. It was the other way round, following Home Assistant's
+  position, where 100% is open.
+- The shade's row counts the same way: "Open", "Closed", or how far it is
+  closed ("40% closed", "Closing · 40%"), in place of "Open · 60%".
+
 ## [1.25.1] - 2026-11-10
 
 - The weather's conditions and temperature ("Partly cloudy · 60°F") are now a

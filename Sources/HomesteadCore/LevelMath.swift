@@ -14,10 +14,18 @@ public enum LevelMath {
         return min(max(raw / 255, 0), 1)
     }
 
-    /// `fan.percentage` and `cover.current_position` are already 0…100.
+    /// `fan.percentage` is already 0…100.
     public static func fraction(percentage: JSONValue?) -> Double {
         guard let raw = percentage?.double else { return 0 }
         return min(max(raw / 100, 0), 1)
+    }
+
+    /// `cover.current_position` is 0 shut … 100 open, and a shade's slider
+    /// runs the other way: the bar fills as the shade comes down, the way a
+    /// blind covers a window, so an empty bar is a fully open shade.
+    public static func fraction(coverPosition: JSONValue?) -> Double {
+        guard let raw = coverPosition?.double else { return 0 }
+        return 1 - min(max(raw / 100, 0), 1)
     }
 
     /// Lights take `brightness_pct` 1…100. Zero is deliberately unreachable:
@@ -35,7 +43,14 @@ public enum LevelMath {
         return Int(((pct / step).rounded() * step).rounded()).clamped(to: 0...100)
     }
 
+    /// The position to send for a slider let go at `fraction`: a full bar is
+    /// a shut shade, HA's 0. See `fraction(coverPosition:)`.
     public static func coverPosition(from fraction: Double) -> Int {
+        100 - coverClosedPercent(from: fraction)
+    }
+
+    /// How far down a shade is, 0…100: what its slider and its row show.
+    public static func coverClosedPercent(from fraction: Double) -> Int {
         Int((min(max(fraction, 0), 1) * 100).rounded()).clamped(to: 0...100)
     }
 }

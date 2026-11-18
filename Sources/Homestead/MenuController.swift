@@ -626,7 +626,7 @@ final class MenuController: NSObject, NSWindowDelegate {
         switch device.kind {
         case .light: return LevelMath.fraction(brightness: state.attributes["brightness"])
         case .fan: return LevelMath.fraction(percentage: state.attributes["percentage"])
-        case .cover: return LevelMath.fraction(percentage: state.attributes["current_position"])
+        case .cover: return LevelMath.fraction(coverPosition: state.attributes["current_position"])
         case .mediaPlayer: return MediaCapabilities.volume(of: state) ?? 0
         case .thermostat, .toggle, .sensor, .button, .lock, .select, .gauge: return 0
         }
