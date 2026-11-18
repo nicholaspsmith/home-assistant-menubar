@@ -33,10 +33,28 @@ final class LevelMathTests: XCTestCase {
         XCTAssertEqual(LevelMath.fanPercentage(from: 0.42, step: 0), 42)
     }
 
-    func testCoverPositionSpansTheFullRange() {
-        XCTAssertEqual(LevelMath.coverPosition(from: 0), 0)
-        XCTAssertEqual(LevelMath.coverPosition(from: 0.5), 50)
-        XCTAssertEqual(LevelMath.coverPosition(from: 1), 100)
+    func testAFullCoverSliderIsAShutShade() {
+        // HA's position runs 0 shut … 100 open; the bar fills as the shade
+        // comes down, so an empty bar is a fully open shade.
+        XCTAssertEqual(LevelMath.coverPosition(from: 0), 100)
+        XCTAssertEqual(LevelMath.coverPosition(from: 0.25), 75)
+        XCTAssertEqual(LevelMath.coverPosition(from: 1), 0)
+    }
+
+    func testCoverPositionFillsTheBarAsTheShadeCloses() {
+        XCTAssertEqual(LevelMath.fraction(coverPosition: .number(100)), 0, accuracy: 0.001)
+        XCTAssertEqual(LevelMath.fraction(coverPosition: .number(75)), 0.25, accuracy: 0.001)
+        XCTAssertEqual(LevelMath.fraction(coverPosition: .number(0)), 1, accuracy: 0.001)
+        XCTAssertEqual(LevelMath.fraction(coverPosition: .number(140)), 0, accuracy: 0.001)
+        // No report yet: an empty bar, as for every other slider.
+        XCTAssertEqual(LevelMath.fraction(coverPosition: nil), 0)
+    }
+
+    func testACoverSliderLandsWhereItWasLetGo() {
+        for position in [0, 1, 33, 50, 99, 100] {
+            let fraction = LevelMath.fraction(coverPosition: .number(Double(position)))
+            XCTAssertEqual(LevelMath.coverPosition(from: fraction), position)
+        }
     }
 
     func testPercentageAttributeConvertsToFraction() {

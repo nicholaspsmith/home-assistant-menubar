@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/animation.png" alt="Gertie opening her front door a crack"></p>
 
-**Version 1.25.1** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
+**Version 1.26.0** · [Changelog](https://github.com/nicholaspsmith/home-assistant-menubar/releases)
 
 Home Assistant in the menu bar. The first row picks a dashboard; the rest of the
 menu is that dashboard's devices: switches, sliders for brightness, warmth, fan
@@ -150,7 +150,7 @@ that entity's normal row.
 | `lock` | Locked/Unlocked/Locking/Unlocking/Jammed/Open | one button that does the opposite, **Lock** or **Unlock**, on the first press; off while the lock is moving. The only lock in a section with a heading is a **padlock on the heading** instead: click it to unlock (locked, green, closed) or lock (unlocked or open, red, open); red with a warning badge when jammed (a click locks again); orange and unclickable while moving, grey and unclickable when unavailable. A section with two or more locks keeps them as rows |
 | `input_select`, `select` | — | the current option as a button: click it to expand the options under the row, click one to choose it |
 | `fan` | speed % | switch, speed slider snapped to the fan's own step |
-| `cover` | Open/Closed/Opening, position | open / stop / close, position slider where supported (shown even while closed) |
+| `cover` | Open, Closed, or how far it is closed ("40% closed", "Closing · 40%") | open / stop / close, position slider where supported (shown even while closed): an empty bar is fully open, a full bar fully closed |
 | `climate`, `water_heater` | reading · current action (Heating, Cooling, Idle) | mode picker from the entity's `hvac_modes` (in place of the switch); the target, or both ends of a heat/cool range, as buttons: click one, then ▲▼ step it |
 | `media_player` | what's playing, or the source | power, volume slider or volume ▼ mute ▲, ⏮ ⏯ ⏭ — each only if the player supports it |
 | `sensor`, `binary_sensor` | value worded as HA does (OK/Problem, 6 h ago, 14 d) | read-only; hidden unless **Preferences… ▸ Show Sensors** is on |
@@ -282,6 +282,10 @@ Keychain, set it to `false` and sign in again in **Preferences… ▸ Connection
   checked, so the time is when it triggers, not a promise that it acts.
 - **Sliders show only while a device is on**, except a cover's: setting a
   closed shade to half-way is how you open it half-way.
+- **A cover's slider fills as the shade closes.** Home Assistant's
+  `current_position` counts the other way (100 is fully open), which made a
+  full bar an uncovered window. The slider and the row's percentage are
+  `100 - current_position`; the call still sends Home Assistant's number.
 - **Thermostat targets are stepped with buttons.** Presses collect briefly and
   go as one service call, and the row shows the sent value until the
   thermostat confirms it. Keyboard arrows cannot be used: a tracking menu keeps

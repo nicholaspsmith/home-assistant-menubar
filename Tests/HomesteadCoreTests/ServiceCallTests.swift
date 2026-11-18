@@ -40,9 +40,10 @@ final class ServiceCallTests: XCTestCase {
     }
 
     func testCoverLevelSetsPosition() {
+        // A quarter of the bar is a quarter of the way shut: HA's 75.
         let call = ServiceCall.setLevel(garage, fraction: 0.25, state: nil)
         XCTAssertEqual(call, ServiceCall(domain: "cover", service: "set_cover_position", entityId: "cover.garage",
-                                         serviceData: ["position": .number(25)]))
+                                         serviceData: ["position": .number(75)]))
     }
 
     func testKindsWithoutASliderHaveNoLevelCall() {

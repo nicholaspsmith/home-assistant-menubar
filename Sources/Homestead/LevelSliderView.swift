@@ -18,7 +18,8 @@ enum SliderStyle: Equatable {
         switch self {
         case .warmth: return ("sun.horizon", "sun.max")
         case .level(.fan): return ("wind", "fanblades")
-        case .level(.cover): return ("blinds.horizontal.closed", "blinds.horizontal.open")
+        // A shade's bar fills as it closes: see `LevelMath.fraction(coverPosition:)`.
+        case .level(.cover): return ("blinds.horizontal.open", "blinds.horizontal.closed")
         case .level(.mediaPlayer): return ("speaker.fill", "speaker.wave.3.fill")
         case .level: return ("light.min", "light.max")
         }

@@ -196,9 +196,7 @@ final class DeviceRowView: NSView {
             guard state.isOn, state.attributes["percentage"]?.double != nil else { return "" }
             return "\(Int((LevelMath.fraction(percentage: state.attributes["percentage"]) * 100).rounded()))%"
         case .cover(let positionable):
-            let name = state.state.prefix(1).uppercased() + state.state.dropFirst()
-            guard positionable, let position = state.attributes["current_position"]?.int else { return name }
-            return "\(name) · \(position)%"
+            return CoverText.text(state, positionable: positionable)
         case .lock:
             return LockControl.text(state)
         // The select's value is its own control, the button that opens the
